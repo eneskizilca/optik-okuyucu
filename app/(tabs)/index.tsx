@@ -1,98 +1,170 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, RefreshControl } from 'react-native';
+import { Colors, Spacing, BorderRadius } from '../../constants/theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { getExams, getResultsForExam } from '../../utils/storage';
+import { Exam } from '../../utils/types';
+import ExamCard from '../../components/ExamCard';
+import { useNavigation } from 'expo-router';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [totalScans, setTotalScans] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const navigation = useNavigation();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const loadData = async () => {
+    try {
+      const storedExams = await getExams();
+      setExams(storedExams.slice(0, 3)); // Show maximum 3 recent exams
+
+      let scans = 0;
+      for (const exam of storedExams) {
+        const results = await getResultsForExam(exam.id);
+        scans += results.length;
+      }
+      setTotalScans(scans);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadData();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  }, []);
+
+  return (
+    <ScrollView 
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+    >
+      <View style={styles.header}>
+        <Text style={styles.greeting}>Hoş Geldiniz 👋</Text>
+        <Text style={styles.subtitle}>Optik Okuyucu Kontrol Paneli</Text>
+      </View>
+
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <MaterialCommunityIcons name="file-document-multiple-outline" size={32} color={Colors.primary} />
+          <Text style={styles.statValue}>{exams.length}</Text>
+          <Text style={styles.statLabel}>Sınavlar</Text>
+        </View>
+        <View style={styles.statCard}>
+          <MaterialCommunityIcons name="camera-iris" size={32} color={Colors.accent} />
+          <Text style={styles.statValue}>{totalScans}</Text>
+          <Text style={styles.statLabel}>Taramalar</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Son Sınavlar</Text>
+        </View>
+        
+        {exams.length === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons name="flask-empty-outline" size={48} color={Colors.textSecondary} />
+            <Text style={styles.emptyText}>Henüz sınav bulunmuyor.</Text>
+            <Text style={styles.emptySubtext}>"Sınav Oluştur" sekmesinden başlayın.</Text>
+          </View>
+        ) : (
+          exams.map((exam) => (
+            <ExamCard key={exam.id} exam={exam} />
+          ))
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    padding: Spacing.lg,
+    paddingTop: Spacing.xl,
+  },
+  greeting: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: Spacing.xs,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+  },
+  statsContainer: {
     flexDirection: 'row',
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
     alignItems: 'center',
-    gap: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginTop: Spacing.sm,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  statLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: Spacing.xs,
   },
+  section: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+  },
+  emptyText: {
+    color: Colors.text,
+    fontSize: 16,
+    marginTop: Spacing.md,
+    fontWeight: '500',
+  },
+  emptySubtext: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    marginTop: Spacing.xs,
+  }
 });

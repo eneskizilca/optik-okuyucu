@@ -119,7 +119,7 @@ export default function CreateExamScreen() {
     }
 
     return (
-      <Svg width="100%" height={300} viewBox={`0 0 ${sheetWidth} ${sheetHeight}`} style={styles.svgPreview}>
+      <Svg width="100%" viewBox={`0 0 ${sheetWidth} ${sheetHeight}`} style={[{ aspectRatio: sheetWidth / sheetHeight }, styles.svgPreview]}>
         <Rect width="100%" height="100%" fill="white" />
         
         {/* Title */}

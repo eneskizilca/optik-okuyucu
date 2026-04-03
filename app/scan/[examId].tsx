@@ -115,15 +115,16 @@ export default function ScanScreen() {
           
           /* 
             WEBVIEW HTML PIPELINE
-            1- Perspective Transform, 
+            1- Perspective Transform (OpenCV.js), 
             2- Tesseract OCR (Ad, Soyad),
             3- Bubble Reading, 
             4- Overlaid Image Saving 
           */
           const script = `
             const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+            const OPENCV_URL = "https://docs.opencv.org/4.8.0/opencv.js";
             
-            // Tesseract'i yükleme fonksiyonu
+            // Script yükleme fonksiyonu
             function loadScript(src) {
                 return new Promise((resolve, reject) => {
                     const s = document.createElement('script');
@@ -136,26 +137,191 @@ export default function ScanScreen() {
 
             async function runPipeline() {
                 try {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Yapay Zeka (OCR) Motoru Yükleniyor (1/3)...' }));
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Yapay Zeka (Görüntü İşleme) Yükleniyor (1/4)...' }));
+                    
+                    // OpenCV'yi bekleme
+                    await loadScript(OPENCV_URL);
+                    await new Promise((resolve) => {
+                       let check = setInterval(() => { if (window.cv && window.cv.Mat) { clearInterval(check); resolve(); } }, 200);
+                    });
+
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'El Yazısı Motoru Yükleniyor (2/4)...' }));
                     await loadScript(TESSERACT_URL);
                     
                     const img = new Image();
                     img.onload = async function() {
                         try {
-                            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Optik Form Oku... Çizim Yapılıyor (2/3)...' }));
+                            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Optik Sınırlar Bulunuyor (3/4)...' }));
                             
-                            // GERÇEK SENARYODA BURADA AFFINE TRANSFORM ILE KÖŞE BULUNUR VE KIRPILIR.
-                            // Biz şablonumuzun hizalama esnekliğini kullanarak direkt Canvas (800x1100 ratio) haritasına oturtacağız.
+                            // Orijinal kesilmiş fotoğrafı geçici bir tuvale alalım
+                            const origCanvas = document.createElement('canvas');
+                            origCanvas.width = img.width;
+                            origCanvas.height = img.height;
+                            const ctxOrig = origCanvas.getContext('2d');
+                            ctxOrig.drawImage(img, 0, 0, img.width, img.height);
+                            
+                            // En güvenilir OpenCV Doküman Tarama Algoritması (Canny Edge + Convexity)
+                            let src = cv.imread(origCanvas);
+                            
+                            // Hız ve başarı oranını artırmak için resmi daralt
+                            let ratio = img.height / 500.0;
+                            let rawWidth = Math.round(img.width / ratio);
+                            let downscaled = new cv.Mat();
+                            cv.resize(src, downscaled, new cv.Size(rawWidth, 500), 0, 0, cv.INTER_AREA);
+
+                            let gray = new cv.Mat();
+                            cv.cvtColor(downscaled, gray, cv.COLOR_RGBA2GRAY, 0);
+                            cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+                            
+                            // Kenarları Canny ile bul 
+                            let edges = new cv.Mat();
+                            cv.Canny(gray, edges, 75, 200, 3, false);
+                            
+                            let contours = new cv.MatVector();
+                            let hierarchy = new cv.Mat();
+                            cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+                            
+                            // Kontürleri array'e al ve alana göre en büyükleri sırala
+                            let cntsArray = [];
+                            for (let i = 0; i < contours.size(); ++i) {
+                                cntsArray.push(contours.get(i));
+                            }
+                            cntsArray.sort((a, b) => cv.contourArea(b) - cv.contourArea(a));
+
+                            let paperContour = null;
+                            for (let i = 0; i < cntsArray.length; ++i) {
+                                if (i > 5) break; 
+                                let cnt = cntsArray[i];
+                                let arcLen = cv.arcLength(cnt, true);
+                                let approx = new cv.Mat();
+                                cv.approxPolyDP(cnt, approx, 0.02 * arcLen, true);
+                                
+                                if (approx.rows === 4 && cv.isContourConvex(approx)) {
+                                    let area = cv.contourArea(approx);
+                                    if(area > (rawWidth * 500 * 0.15)) { // En az %15'ini kaplamalı
+                                        paperContour = approx;
+                                        break;
+                                    }
+                                } else {
+                                    approx.delete();
+                                }
+                            }
+
+                            for(let i=0; i<cntsArray.length; i++) {
+                                if (cntsArray[i] !== paperContour) cntsArray[i].delete();
+                            }
+
+                            let srcCoords, dstCoords;
+                            if (paperContour !== null) {
+                                // Orijinal çözünürlüğe geri çarp
+                                let pts = [];
+                                for(let i=0; i<4; i++) {
+                                    pts.push({ x: paperContour.data32S[i*2] * ratio, y: paperContour.data32S[i*2+1] * ratio });
+                                }
+
+                                // orderPoints Algoritması (Evrensel: TL, TR, BR, BL)
+                                pts.sort((a,b) => (a.x + a.y) - (b.x + b.y));
+                                let ptTL = pts[0];
+                                let ptBR = pts[3];
+                                let remaining = [pts[1], pts[2]];
+                                remaining.sort((a,b) => (a.y - a.x) - (b.y - b.x));
+                                let ptTR = remaining[0];
+                                let ptBL = remaining[1];
+                                
+                                srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                                    ptTL.x, ptTL.y,
+                                    ptTR.x, ptTR.y,
+                                    ptBR.x, ptBR.y,
+                                    ptBL.x, ptBL.y
+                                ]);
+                            } else {
+                                // Fallback (Bozulma yok)
+                                srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                                    0, 0,
+                                    img.width, 0,
+                                    img.width, img.height,
+                                    0, img.height
+                                ]);
+                            }
+
+                            // Tam Sayfaya Homografi (Kağıt = A4 Sınırları)
+                            dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
+                                0, 0,
+                                800, 0,
+                                800, 1100,
+                                0, 1100
+                            ]);
+
+                            let M = cv.getPerspectiveTransform(srcCoords, dstCoords);
+                            let warped = new cv.Mat();
+                            cv.warpPerspective(src, warped, M, new cv.Size(800, 1100), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+                            // Asıl kullanılacak Canvas (Warped Kağıt)
                             const canvas = document.createElement('canvas');
                             canvas.width = 800;
                             canvas.height = 1100;
+                            cv.imshow(canvas, warped);
+
+                            // Bellek temizliği (1. Aşama Sadece Olaylar)
+                            src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete(); downscaled.delete();
+                            if(paperContour !== null) paperContour.delete();
+
+                            const rawImgData = canvas.getContext('2d').getImageData(0, 0, 800, 1100);
+                            let data = rawImgData.data;
                             const ctx = canvas.getContext('2d');
                             
-                            // Resmi 800x1100 stretch - Basit bir WarpPerspective Simülasyonu
-                            ctx.drawImage(img, 0, 0, 800, 1100);
+                            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Yazıcı Payı (Margin) Düzeltiliyor (4/5)...' }));
                             
-                            const imgData = ctx.getImageData(0, 0, 800, 1100);
-                            const data = imgData.data;
+                            // 2-STEP ALIGNMENT (Yazıcının küçültme payını iptal etme)
+                            // Köşe bölgelerinde (150x150) küçük bir tarayıcı ile siyah referans karelerin tam merkezini bul.
+                            function findMarkerCenter(startX, startY, width, height) {
+                                let minBrightness = 255;
+                                let bestX = startX + width/2;
+                                let bestY = startY + height/2;
+                                let ws = 24; // marker size estimate
+                                for(let y = startY; y < startY + height - ws; y+=3) {
+                                    for(let x = startX; x < startX + width - ws; x+=3) {
+                                        let sum = 0, count = 0;
+                                        for(let wy = 0; wy < ws; wy+=4) {
+                                            for(let wx = 0; wx < ws; wx+=4) {
+                                                let idx = ((y + wy) * 800 + (x + wx)) * 4;
+                                                sum += 0.2126*data[idx] + 0.7152*data[idx+1] + 0.0722*data[idx+2];
+                                                count++;
+                                            }
+                                        }
+                                        let avg = sum / count;
+                                        if (avg < minBrightness) { minBrightness = avg; bestX = x + ws/2; bestY = y + ws/2; }
+                                    }
+                                }
+                                if(minBrightness > 130) return null; // Siyah kare yoksa iptal
+                                return {x: bestX, y: bestY};
+                            }
+
+                            let tl = findMarkerCenter(0, 0, 150, 150);
+                            let tr = findMarkerCenter(650, 0, 150, 150);
+                            let br = findMarkerCenter(650, 950, 150, 150);
+                            let bl = findMarkerCenter(0, 950, 150, 150);
+
+                            if (tl && tr && br && bl) {
+                                // Bulunan gerçek marker koordinatlarını, ideal sanal koordinatlara zoomlayarak yapıştır.
+                                let srcCoords2 = cv.matFromArray(4, 1, cv.CV_32FC2, [ tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y ]);
+                                let dstCoords2 = cv.matFromArray(4, 1, cv.CV_32FC2, [ 40, 40, 760, 40, 760, 1060, 40, 1060 ]);
+                                
+                                let M2 = cv.getPerspectiveTransform(srcCoords2, dstCoords2);
+                                let finalWarped = new cv.Mat();
+                                cv.warpPerspective(warped, finalWarped, M2, new cv.Size(800, 1100), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255,255,255,255));
+                                cv.imshow(canvas, finalWarped);
+                                
+                                srcCoords2.delete(); dstCoords2.delete(); M2.delete(); finalWarped.delete();
+                                
+                                // Yeni düzeltilmiş canvas datasını optik okuyucuya ver
+                                data = ctx.getImageData(0,0,800,1100).data;
+                            }
+                            
+                            // ANA BELLEK TEMİZLİĞİ:
+                            M.delete(); warped.delete(); srcCoords.delete(); dstCoords.delete();
+                            
+                            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Cevaplar Hesaplanıyor (5/5)...' }));
 
                             const threshold = 130; 
                             const exam = ${examDataString};

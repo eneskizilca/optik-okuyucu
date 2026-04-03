@@ -8,7 +8,7 @@ import ExamCard from '../../components/ExamCard';
 import { useNavigation } from 'expo-router';
 
 export default function HomeScreen() {
-  const [exams, setExams] = useState<Exam[]>([]);
+  const [exams, setExams] = useState<(Exam & { scanCount: number })[]>([]);
   const [totalScans, setTotalScans] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
@@ -16,13 +16,16 @@ export default function HomeScreen() {
   const loadData = async () => {
     try {
       const storedExams = await getExams();
-      setExams(storedExams.slice(0, 3)); // Show maximum 3 recent exams
 
       let scans = 0;
-      for (const exam of storedExams) {
-        const results = await getResultsForExam(exam.id);
-        scans += results.length;
-      }
+      const examsWithCounts = await Promise.all(
+        storedExams.map(async (exam) => {
+          const results = await getResultsForExam(exam.id);
+          scans += results.length;
+          return { ...exam, scanCount: results.length };
+        })
+      );
+      setExams(examsWithCounts.slice(0, 3));
       setTotalScans(scans);
     } catch (e) {
       console.error(e);
@@ -78,7 +81,7 @@ export default function HomeScreen() {
           </View>
         ) : (
           exams.map((exam) => (
-            <ExamCard key={exam.id} exam={exam} />
+            <ExamCard key={exam.id} exam={exam} scanCount={exam.scanCount} />
           ))
         )}
       </View>

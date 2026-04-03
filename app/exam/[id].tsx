@@ -1,12 +1,15 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getExamById, saveExam, getResultsForExam, deleteExam, deleteResult } from '../../utils/storage';
+import { getExamById, saveExam, getResultsForExam, deleteExam, deleteResult, saveExcelForExam, getExcelForExam, deleteExcelForExam, ExcelMeta } from '../../utils/storage';
+import { processExcel } from '../../utils/excelProcessor';
 import { Exam, ScanResult } from '../../utils/types';
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import Svg, { Circle, Text as SvgText, Rect, G } from 'react-native-svg';
 
 export default function ExamDetailScreen() {
@@ -16,6 +19,9 @@ export default function ExamDetailScreen() {
   const [results, setResults] = useState<ScanResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [excelMeta, setExcelMeta] = useState<ExcelMeta | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const viewShotRef = useRef<ViewShot>(null);
 
   const OPTIONS = ['A', 'B', 'C', 'D', 'E'];
@@ -29,6 +35,8 @@ export default function ExamDetailScreen() {
         setExam(e);
         const r = await getResultsForExam(id);
         setResults(r);
+        const excel = await getExcelForExam(id);
+        setExcelMeta(excel);
       } else {
         Alert.alert('Hata', 'Sınav bulunamadı', [{ text: 'Tamam', onPress: () => router.back() }]);
       }
@@ -81,6 +89,98 @@ export default function ExamDetailScreen() {
         },
       ]
     );
+  };
+
+  // ─── Excel İşlemleri ─────────────────────────────────────────────
+  const handlePickExcel = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled || !res.assets || res.assets.length === 0) return;
+
+      const asset = res.assets[0];
+      // Dosyayı base64 olarak oku (legacy API binary-safe)
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const meta: ExcelMeta = {
+        fileName: asset.name,
+        uploadedAt: Date.now(),
+        base64,
+      };
+      await saveExcelForExam(id as string, meta);
+      setExcelMeta(meta);
+      Alert.alert('Başarılı', `"${asset.name}" yüklendi.`);
+    } catch (e: any) {
+      Alert.alert('Hata', 'Dosya okunamadı: ' + e.message);
+    }
+  };
+
+  const handleProcessExcel = async () => {
+    if (!excelMeta || !exam) return;
+    if (results.length === 0) {
+      Alert.alert('Uyarı', 'Henüz tarama yapılmamış. Lütfen önce optikleri tarayın.');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const { matched, notFound, outputBase64 } = await processExcel(excelMeta.base64, results);
+
+      // Çıktı dosyasını geçici dizine yaz
+      // Dosyayı gerçek binary olarak yaz (base64 → .xlsx)
+      const safeFileName = `notlar_${exam.name.replace(/[/\\:*?"<>|]/g, '_')}.xlsx`;
+      const cacheDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
+      const outPath = cacheDir + safeFileName;
+      await FileSystem.writeAsStringAsync(outPath, outputBase64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const outUri = outPath;
+
+      // Uyarı göster sonra paylaş
+      const msg = notFound.length > 0
+        ? `${matched} öğrencinin notu işlendi.\n\nExcel'de bulunamayan taramalar: ${notFound.join(', ')}`
+        : `${matched} öğrencinin notu başarıyla işlendi.`;
+
+      Alert.alert('İşlem Tamamlandı', msg, [
+        {
+          text: 'Excel\u2019i İndir',
+          onPress: async () => {
+            const available = await Sharing.isAvailableAsync();
+            if (available) {
+              await Sharing.shareAsync(outUri, {
+                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                dialogTitle: `${exam.name} Notlar.xlsx`,
+              });
+            } else {
+              Alert.alert('Hata', 'Paylaşım bu cihazda desteklenmiyor.');
+            }
+          },
+        },
+        { text: 'Kapat', style: 'cancel' },
+      ]);
+    } catch (e: any) {
+      Alert.alert('Hata', e.message || 'Excel işlenemedi.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRemoveExcel = () => {
+    Alert.alert('Excel Kaldır', 'Yüklenen Excel dosyası silinsin mi?', [
+      { text: 'İptal', style: 'cancel' },
+      {
+        text: 'Kaldır',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteExcelForExam(id as string);
+          setExcelMeta(null);
+        },
+      },
+    ]);
   };
 
   const handleDeleteExam = () => {
@@ -191,6 +291,16 @@ export default function ExamDetailScreen() {
       </Svg>
     );
   };
+
+  // Arama filtresi (must be before early return — Rules of Hooks)
+  const filteredResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return results;
+    return results.filter(r =>
+      (r.studentName || '').toLowerCase().includes(q) ||
+      (r.studentNo || '').toLowerCase().includes(q)
+    );
+  }, [results, searchQuery]);
 
   if (loading || !exam) {
     return (
@@ -341,15 +451,77 @@ export default function ExamDetailScreen() {
           </View>
         )}
 
+        {/* Excel Entegrasyonu */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Excel Entegrasyonu</Text>
+          <View style={styles.excelCard}>
+            {excelMeta ? (
+              // Dosya yüklü
+              <View>
+                <View style={styles.excelFileRow}>
+                  <MaterialCommunityIcons name="microsoft-excel" size={28} color="#1D6F42" />
+                  <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                    <Text style={styles.excelFileName} numberOfLines={1}>{excelMeta.fileName}</Text>
+                    <Text style={styles.excelFileDate}>
+                      {new Date(excelMeta.uploadedAt).toLocaleString('tr-TR')}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={handleRemoveExcel} style={styles.excelRemoveBtn}>
+                    <MaterialCommunityIcons name="close" size={18} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.excelHint}>
+                  "ÖĞRENCİ NO" sütunu eşleştirilerek "NOT" sütununa puan yazılır.
+                </Text>
+              </View>
+            ) : (
+              // Dosya yüklü değil
+              <View>
+                <Text style={styles.excelHint}>
+                  Sınıf listesini içeren .xlsx dosyasını yükleyin. Taramalar bittikten sonra notlar otomatik eşleştirilir.
+                </Text>
+                <TouchableOpacity style={styles.excelUploadBtn} onPress={handlePickExcel}>
+                  <MaterialCommunityIcons name="upload" size={20} color={Colors.primary} />
+                  <Text style={styles.excelUploadText}>Excel Dosyası Seç (.xlsx)</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {excelMeta && (
+              <TouchableOpacity style={styles.excelChangeBtn} onPress={handlePickExcel}>
+                <Text style={styles.excelChangeBtnText}>Farklı Dosya Seç</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
         {/* Scans List */}
         <View style={styles.section}>
            <Text style={styles.sectionTitle}>Taramalar ({results.length})</Text>
-           {results.length === 0 ? (
+
+           {/* Arama Kutusu */}
+           {results.length > 0 && (
+             <View style={styles.searchBar}>
+               <MaterialCommunityIcons name="magnify" size={20} color={Colors.textSecondary} />
+               <TextInput
+                 style={styles.searchInput}
+                 placeholder="İsim veya numara ile ara..."
+                 placeholderTextColor={Colors.textSecondary}
+                 value={searchQuery}
+                 onChangeText={setSearchQuery}
+                 clearButtonMode="while-editing"
+               />
+             </View>
+           )}
+
+           {filteredResults.length === 0 ? (
                <View style={styles.emptyCard}>
-                   <Text style={{color: Colors.textSecondary}}>Henüz tarama yapılmadı.</Text>
+                   <Text style={{color: Colors.textSecondary}}>
+                     {results.length === 0 ? 'Henüz tarama yapılmadı.' : 'Sonuç bulunamadı.'}
+                   </Text>
                </View>
            ) : (
-               results.map(r => (
+               filteredResults.map(r => (
                    <View key={r.id} style={styles.resultCard}>
                      <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={() => router.push(`/result/${r.id}`)}>
                          <View style={{ flex: 1 }}>
@@ -369,9 +541,25 @@ export default function ExamDetailScreen() {
         </View>
       </ScrollView>
 
+      {/* Excel İşle FAB */}
+      {excelMeta && (
+        <TouchableOpacity
+          style={[styles.excelFab, isProcessing && { opacity: 0.6 }]}
+          onPress={handleProcessExcel}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <MaterialCommunityIcons name="microsoft-excel" size={24} color="#fff" />
+          )}
+          <Text style={styles.excelFabText}>{isProcessing ? 'İşleniyor...' : "Excel'e İşle & İndir"}</Text>
+        </TouchableOpacity>
+      )}
+
       {/* FAB - Camera Button */}
-      <TouchableOpacity 
-        style={styles.fab} 
+      <TouchableOpacity
+        style={[styles.fab, excelMeta && { bottom: 110 }]}
         onPress={() => router.push(`/scan/${exam.id}`)}
       >
         <MaterialCommunityIcons name="camera-iris" size={32} color="#FFF" />
@@ -640,5 +828,103 @@ const styles = StyleSheet.create({
     height: 6,
     backgroundColor: Colors.error,
     borderRadius: 3,
+  },
+  // ─── Excel Stilleri ───
+  excelCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+  },
+  excelFileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  excelFileName: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  excelFileDate: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  excelRemoveBtn: {
+    padding: 6,
+  },
+  excelHint: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: Spacing.md,
+  },
+  excelUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderStyle: 'dashed',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    justifyContent: 'center',
+  },
+  excelUploadText: {
+    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  excelChangeBtn: {
+    marginTop: Spacing.md,
+    alignItems: 'center',
+  },
+  excelChangeBtnText: {
+    color: Colors.primary,
+    fontSize: 13,
+  },
+  excelFab: {
+    position: 'absolute',
+    bottom: 30,
+    left: Spacing.lg,
+    right: 80,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#1D6F42',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    shadowColor: '#1D6F42',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  excelFabText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    color: Colors.text,
+    fontSize: 15,
   },
 });

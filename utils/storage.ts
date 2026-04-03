@@ -3,6 +3,7 @@ import { Exam, ScanResult } from './types';
 
 const EXAMS_KEY = '@exams';
 const RESULTS_KEY_PREFIX = '@results_';
+const EXCEL_KEY_PREFIX = '@excel_';
 
 // Exam Management
 export const getExams = async (): Promise<Exam[]> => {
@@ -45,8 +46,9 @@ export const deleteExam = async (id: string): Promise<void> => {
     const exams = await getExams();
     const filtered = exams.filter(e => e.id !== id);
     await AsyncStorage.setItem(EXAMS_KEY, JSON.stringify(filtered));
-    // Also delete associated results
+    // Also delete associated results and excel
     await AsyncStorage.removeItem(`${RESULTS_KEY_PREFIX}${id}`);
+    await AsyncStorage.removeItem(`${EXCEL_KEY_PREFIX}${id}`);
   } catch (e) {
     console.error('Failed to delete exam:', e);
     throw e;
@@ -97,5 +99,40 @@ export const deleteResult = async (examId: string, resultId: string): Promise<vo
   } catch (e) {
     console.error('Failed to delete result:', e);
     throw e;
+  }
+};
+
+// ─── Excel Yönetimi (Sınav bazlı) ───────────────────────────────────────────
+
+export interface ExcelMeta {
+  fileName: string;
+  uploadedAt: number;
+  base64: string;
+}
+
+export const saveExcelForExam = async (examId: string, meta: ExcelMeta): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(`${EXCEL_KEY_PREFIX}${examId}`, JSON.stringify(meta));
+  } catch (e) {
+    console.error('Failed to save excel:', e);
+    throw e;
+  }
+};
+
+export const getExcelForExam = async (examId: string): Promise<ExcelMeta | null> => {
+  try {
+    const json = await AsyncStorage.getItem(`${EXCEL_KEY_PREFIX}${examId}`);
+    return json ? JSON.parse(json) : null;
+  } catch (e) {
+    console.error('Failed to get excel:', e);
+    return null;
+  }
+};
+
+export const deleteExcelForExam = async (examId: string): Promise<void> => {
+  try {
+    await AsyncStorage.removeItem(`${EXCEL_KEY_PREFIX}${examId}`);
+  } catch (e) {
+    console.error('Failed to delete excel:', e);
   }
 };

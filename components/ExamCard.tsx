@@ -1,42 +1,61 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Exam } from '../utils/types';
 import { Colors, Spacing, BorderRadius } from '../constants/theme';
-import { Link } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 interface ExamCardProps {
   exam: Exam;
   scanCount?: number;
+  onDelete?: () => void;
 }
 
-export default function ExamCard({ exam, scanCount = 0 }: ExamCardProps) {
+export default function ExamCard({ exam, scanCount = 0, onDelete }: ExamCardProps) {
   const date = new Date(exam.createdAt).toLocaleDateString('tr-TR');
-  
+  const router = useRouter();
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Sınavı Sil',
+      `"${exam.name}" sınavını ve tüm tarama verilerini silmek istiyor musunuz?`,
+      [
+        { text: 'İptal', style: 'cancel' },
+        { text: 'Sil', style: 'destructive', onPress: onDelete },
+      ]
+    );
+  };
+
   return (
-    <Link href={`/exam/${exam.id}`} asChild>
-      <TouchableOpacity style={styles.card} activeOpacity={0.7}>
-        <View style={styles.header}>
-          <Text style={styles.title} numberOfLines={1}>{exam.name}</Text>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={Colors.textSecondary} />
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => router.push(`/exam/${exam.id}` as any)}
+    >
+      {/* Sil butonu — sağ üst köşeye gömülü */}
+      {onDelete && (
+        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+          <MaterialCommunityIcons name="delete-outline" size={18} color={Colors.error} />
+        </TouchableOpacity>
+      )}
+
+      <Text style={styles.title} numberOfLines={1}>{exam.name}</Text>
+
+      <View style={styles.statsContainer}>
+        <View style={styles.statLabel}>
+          <MaterialCommunityIcons name="format-list-numbered" size={15} color={Colors.textSecondary} />
+          <Text style={styles.statText}>{exam.questionCount} Soru</Text>
         </View>
-        
-        <View style={styles.statsContainer}>
-          <View style={styles.statLabel}>
-            <MaterialCommunityIcons name="format-list-numbered" size={16} color={Colors.textSecondary} />
-            <Text style={styles.statText}>{exam.questionCount} Soru</Text>
-          </View>
-          <View style={styles.statLabel}>
-            <MaterialCommunityIcons name="camera-iris" size={16} color={Colors.textSecondary} />
-            <Text style={styles.statText}>{scanCount} Tarama</Text>
-          </View>
-          <View style={styles.statLabel}>
-            <MaterialCommunityIcons name="calendar-month" size={16} color={Colors.textSecondary} />
-            <Text style={styles.statText}>{date}</Text>
-          </View>
+        <View style={styles.statLabel}>
+          <MaterialCommunityIcons name="camera-iris" size={15} color={Colors.textSecondary} />
+          <Text style={styles.statText}>{scanCount} Tarama</Text>
         </View>
-      </TouchableOpacity>
-    </Link>
+        <View style={styles.statLabel}>
+          <MaterialCommunityIcons name="calendar-month" size={15} color={Colors.textSecondary} />
+          <Text style={styles.statText}>{date}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -48,18 +67,32 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    // Tam genişlik — parent ScrollView padding'inden faydalanır
+    width: '100%',
+    // Gömülü buton için relative pozisyonlama
+    position: 'relative',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  deleteBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    zIndex: 10,
   },
   title: {
     color: Colors.text,
     fontSize: 18,
     fontWeight: '600',
-    flex: 1,
+    marginBottom: Spacing.sm,
+    // Silme butonuyla çakışmaması için sağdan boşluk
+    paddingRight: 40,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -75,5 +108,5 @@ const styles = StyleSheet.create({
   statText: {
     color: Colors.textSecondary,
     fontSize: 14,
-  }
+  },
 });

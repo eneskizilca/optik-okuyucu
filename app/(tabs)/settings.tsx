@@ -42,6 +42,12 @@ export default function SettingsScreen() {
           </View>
         </TouchableOpacity>
       </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerLine}>Geliştiren: Enes Kızılca</Text>
+        <Text style={styles.footerLine}>3. Sınıf Yazılım Mühendisliği Öğrencisi</Text>
+        <Text style={styles.footerLine}>235541116 | GECE-B</Text>
+      </View>
     </View>
   );
 }
@@ -86,5 +92,19 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
     marginTop: 2,
-  }
+  },
+  footer: {
+    padding: Spacing.lg,
+    paddingBottom: 40,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    marginTop: 'auto',
+  },
+  footerLine: {
+    color: Colors.textSecondary,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
 });

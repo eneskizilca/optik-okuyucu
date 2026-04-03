@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getExamById, saveExam, getResultsForExam, deleteExam, deleteResult } from '../../utils/storage';
@@ -39,9 +39,11 @@ export default function ExamDetailScreen() {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, [id]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [id])
+  );
 
   const updateAnswerKey = async (questionIndex: number, optionIndex: number) => {
     if (!exam) return;
@@ -59,6 +61,26 @@ export default function ExamDetailScreen() {
     const updatedExam = { ...exam, answerKey: newAnswerKey };
     setExam(updatedExam);
     await saveExam(updatedExam);
+  };
+
+  const handleDeleteResult = (resultId: string) => {
+    Alert.alert(
+      'Taramayı Sil',
+      'Bu tarama sonucunu kalıcı olarak silmek istiyor musunuz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: async () => {
+            if (exam) {
+              await deleteResult(exam.id, resultId);
+              await loadData();
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteExam = () => {
@@ -181,6 +203,25 @@ export default function ExamDetailScreen() {
   const dateStr = new Date(exam.createdAt).toLocaleDateString('tr-TR');
   const missingAnsCount = exam.answerKey.filter(a => !a).length;
 
+  // ─── Sınav İstatistikleri ───
+  const avgScore = results.length > 0
+    ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
+    : null;
+
+  const wrongCounts: number[] = Array(exam.questionCount).fill(0);
+  results.forEach(r => {
+    r.answers.forEach((ans, i) => {
+      if (exam.answerKey[i] && ans && ans !== exam.answerKey[i]) {
+        wrongCounts[i]++;
+      }
+    });
+  });
+  const top3Wrong = wrongCounts
+    .map((count, i) => ({ q: i + 1, count }))
+    .filter(x => x.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
@@ -247,6 +288,59 @@ export default function ExamDetailScreen() {
           </View>
         </View>
 
+        {/* Sınav İstatistikleri */}
+        {results.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sınav İstatistikleri</Text>
+            <View style={styles.statsCard}>
+              {/* Sınıf Ortalaması */}
+              <View style={styles.avgRow}>
+                <View style={styles.avgIconBox}>
+                  <MaterialCommunityIcons name="chart-line" size={22} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: Spacing.md }}>
+                  <Text style={styles.avgLabel}>Sınıf Ortalaması</Text>
+                  <Text style={styles.avgValue}>{avgScore} / 100</Text>
+                </View>
+                <View style={styles.avgBadge}>
+                  <Text style={styles.avgBadgeText}>{results.length} Öğrenci</Text>
+                </View>
+              </View>
+
+              {/* Divider */}
+              {top3Wrong.length > 0 && (
+                <View style={styles.divider} />
+              )}
+
+              {/* En çok yanlış yapılan sorular */}
+              {top3Wrong.length > 0 && (
+                <View>
+                  <Text style={styles.top3Title}>En Çok Yanlış Yapılan Sorular</Text>
+                  {top3Wrong.map((item, idx) => {
+                    const barWidth = (item.count / results.length) * 100;
+                    return (
+                      <View key={idx} style={styles.top3Row}>
+                        <View style={styles.top3Medal}>
+                          <Text style={styles.top3MedalText}>{idx + 1}</Text>
+                        </View>
+                        <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                          <View style={styles.top3LabelRow}>
+                            <Text style={styles.top3Q}>{item.q}. Soru</Text>
+                            <Text style={styles.top3Count}>{item.count}/{results.length} yanlış</Text>
+                          </View>
+                          <View style={styles.barBg}>
+                            <View style={[styles.barFill, { width: `${barWidth}%` as any }]} />
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Scans List */}
         <View style={styles.section}>
            <Text style={styles.sectionTitle}>Taramalar ({results.length})</Text>
@@ -256,15 +350,20 @@ export default function ExamDetailScreen() {
                </View>
            ) : (
                results.map(r => (
-                   <TouchableOpacity key={r.id} style={styles.resultCard} onPress={() => router.push(`/result/${r.id}`)}>
-                       <View style={{ flex: 1}}>
-                           <Text style={styles.studentName}>{r.studentName || 'Bilinmiyor'} ({r.studentNo || 'No Yok'})</Text>
-                           <Text style={styles.resultSub}>D: {r.correct} | Y: {r.incorrect} | B: {r.empty}</Text>
-                       </View>
-                       <View style={styles.scoreBox}>
-                           <Text style={styles.scoreText}>{r.score}</Text>
-                       </View>
-                   </TouchableOpacity>
+                   <View key={r.id} style={styles.resultCard}>
+                     <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={() => router.push(`/result/${r.id}`)}>
+                         <View style={{ flex: 1 }}>
+                             <Text style={styles.studentName}>{r.studentName || 'Bilinmiyor'} ({r.studentNo || 'No Yok'})</Text>
+                             <Text style={styles.resultSub}>D: {r.correct} | Y: {r.incorrect} | B: {r.empty}</Text>
+                         </View>
+                         <View style={styles.scoreBox}>
+                             <Text style={styles.scoreText}>{r.score}</Text>
+                         </View>
+                     </TouchableOpacity>
+                     <TouchableOpacity style={styles.resultDeleteBtn} onPress={() => handleDeleteResult(r.id)}>
+                         <MaterialCommunityIcons name="delete-outline" size={18} color={Colors.error} />
+                     </TouchableOpacity>
+                   </View>
                ))
            )}
         </View>
@@ -391,6 +490,17 @@ const styles = StyleSheet.create({
       borderWidth: 1,
       borderColor: Colors.border,
       alignItems: 'center',
+      gap: Spacing.sm,
+  },
+  resultDeleteBtn: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: Colors.surface,
+      borderWidth: 1,
+      borderColor: Colors.border,
   },
   studentName: {
       color: Colors.text,
@@ -430,5 +540,105 @@ const styles = StyleSheet.create({
       shadowOpacity: 0.3,
       shadowRadius: 5.46,
       elevation: 9,
-  }
+  },
+  // İstatistik Kartı
+  statsCard: {
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.lg,
+  },
+  avgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avgIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  avgLabel: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  avgValue: {
+    color: Colors.text,
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  avgBadge: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  avgBadgeText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: Spacing.md,
+  },
+  top3Title: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: Spacing.md,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  top3Row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  top3Medal: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  top3MedalText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  top3LabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  top3Q: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  top3Count: {
+    color: Colors.error,
+    fontSize: 12,
+  },
+  barBg: {
+    height: 6,
+    backgroundColor: Colors.surface,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: 6,
+    backgroundColor: Colors.error,
+    borderRadius: 3,
+  },
 });

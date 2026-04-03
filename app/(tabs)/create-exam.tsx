@@ -89,11 +89,13 @@ export default function CreateExamScreen() {
     const bubbleSpacing = 35;
     const bubbleRadius = 12;
 
+    const halfCount = Math.ceil(questionCount / 2);
+
     const circles = [];
     for (let i = 0; i < questionCount; i++) {
-        const isRightColumn = i >= 20;
+        const isRightColumn = i >= halfCount;
         const qX = isRightColumn ? 420 : 80;
-        const row = isRightColumn ? i - 20 : i;
+        const row = isRightColumn ? i - halfCount : i;
         
         const qY = startY + (row * rowHeight);
 

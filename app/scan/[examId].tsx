@@ -78,9 +78,9 @@ export default function ScanScreen() {
           const screenW = Dimensions.get('window').width;
           const screenH = Dimensions.get('window').height;
           
-          const scanW = screenW * 0.8;
+          const scanW = screenW * 0.85; // UI ile birebir senkronize
           const scanH = scanW * (1100 / 800); 
-          const scanX = screenW * 0.1;
+          const scanX = (screenW - scanW) / 2;
           const scanY = (screenH - scanH) / 2.5; // maskTop (flex 1) vs maskBottom (flex 1.5) merkezlemesi
 
           // Kameranın cover modunda ekrana nasıl taştığını bulma:
@@ -99,7 +99,7 @@ export default function ScanScreen() {
           const cropW = Math.round(scanW / scale);
           const cropH = Math.round(scanH / scale);
 
-          // Piksellerin doğru yerden kırpılması
+          // Piksellerin tam olarak çerçevenin içinden kırpılması (Kullanıcı Çerçevesi = Kağıt)
           const manipResult = await ImageManipulator.manipulateAsync(
             uri,
             [
@@ -160,147 +160,77 @@ export default function ScanScreen() {
                             const ctxOrig = origCanvas.getContext('2d');
                             ctxOrig.drawImage(img, 0, 0, img.width, img.height);
                             
-                            // En güvenilir OpenCV Doküman Tarama Algoritması (Canny Edge + Convexity)
+                            // Kullanıcı kamerayı tam UI içerisine hizaladı, böylece elimizdeki fotoğraf zaten Kağıdın kendisi (Crop edilmiş).
+                            // Sadece resmi 800x1100 formatına çekelim.
                             let src = cv.imread(origCanvas);
-                            
-                            // Hız ve başarı oranını artırmak için resmi daralt
-                            let ratio = img.height / 500.0;
-                            let rawWidth = Math.round(img.width / ratio);
-                            let downscaled = new cv.Mat();
-                            cv.resize(src, downscaled, new cv.Size(rawWidth, 500), 0, 0, cv.INTER_AREA);
-
-                            let gray = new cv.Mat();
-                            cv.cvtColor(downscaled, gray, cv.COLOR_RGBA2GRAY, 0);
-                            cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-                            
-                            // Kenarları Canny ile bul 
-                            let edges = new cv.Mat();
-                            cv.Canny(gray, edges, 75, 200, 3, false);
-                            
-                            let contours = new cv.MatVector();
-                            let hierarchy = new cv.Mat();
-                            cv.findContours(edges, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-                            
-                            // Kontürleri array'e al ve alana göre en büyükleri sırala
-                            let cntsArray = [];
-                            for (let i = 0; i < contours.size(); ++i) {
-                                cntsArray.push(contours.get(i));
-                            }
-                            cntsArray.sort((a, b) => cv.contourArea(b) - cv.contourArea(a));
-
-                            let paperContour = null;
-                            for (let i = 0; i < cntsArray.length; ++i) {
-                                if (i > 5) break; 
-                                let cnt = cntsArray[i];
-                                let arcLen = cv.arcLength(cnt, true);
-                                let approx = new cv.Mat();
-                                cv.approxPolyDP(cnt, approx, 0.02 * arcLen, true);
-                                
-                                if (approx.rows === 4 && cv.isContourConvex(approx)) {
-                                    let area = cv.contourArea(approx);
-                                    if(area > (rawWidth * 500 * 0.15)) { // En az %15'ini kaplamalı
-                                        paperContour = approx;
-                                        break;
-                                    }
-                                } else {
-                                    approx.delete();
-                                }
-                            }
-
-                            for(let i=0; i<cntsArray.length; i++) {
-                                if (cntsArray[i] !== paperContour) cntsArray[i].delete();
-                            }
-
-                            let srcCoords, dstCoords;
-                            if (paperContour !== null) {
-                                // Orijinal çözünürlüğe geri çarp
-                                let pts = [];
-                                for(let i=0; i<4; i++) {
-                                    pts.push({ x: paperContour.data32S[i*2] * ratio, y: paperContour.data32S[i*2+1] * ratio });
-                                }
-
-                                // orderPoints Algoritması (Evrensel: TL, TR, BR, BL)
-                                pts.sort((a,b) => (a.x + a.y) - (b.x + b.y));
-                                let ptTL = pts[0];
-                                let ptBR = pts[3];
-                                let remaining = [pts[1], pts[2]];
-                                remaining.sort((a,b) => (a.y - a.x) - (b.y - b.x));
-                                let ptTR = remaining[0];
-                                let ptBL = remaining[1];
-                                
-                                srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
-                                    ptTL.x, ptTL.y,
-                                    ptTR.x, ptTR.y,
-                                    ptBR.x, ptBR.y,
-                                    ptBL.x, ptBL.y
-                                ]);
-                            } else {
-                                // Fallback (Bozulma yok)
-                                srcCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
-                                    0, 0,
-                                    img.width, 0,
-                                    img.width, img.height,
-                                    0, img.height
-                                ]);
-                            }
-
-                            // Tam Sayfaya Homografi (Kağıt = A4 Sınırları)
-                            dstCoords = cv.matFromArray(4, 1, cv.CV_32FC2, [
-                                0, 0,
-                                800, 0,
-                                800, 1100,
-                                0, 1100
-                            ]);
-
-                            let M = cv.getPerspectiveTransform(srcCoords, dstCoords);
                             let warped = new cv.Mat();
-                            cv.warpPerspective(src, warped, M, new cv.Size(800, 1100), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
-
-                            // Asıl kullanılacak Canvas (Warped Kağıt)
+                            cv.resize(src, warped, new cv.Size(800, 1100), 0, 0, cv.INTER_LINEAR);
+                            
                             const canvas = document.createElement('canvas');
                             canvas.width = 800;
                             canvas.height = 1100;
                             cv.imshow(canvas, warped);
 
-                            // Bellek temizliği (1. Aşama Sadece Olaylar)
-                            src.delete(); gray.delete(); edges.delete(); contours.delete(); hierarchy.delete(); downscaled.delete();
-                            if(paperContour !== null) paperContour.delete();
+                            src.delete();
 
-                            const rawImgData = canvas.getContext('2d').getImageData(0, 0, 800, 1100);
-                            let data = rawImgData.data;
-                            const ctx = canvas.getContext('2d');
+                            // HTML Canvas verisini al (Bubble Reading ve Marker Taraması için)
+                            let ctx = canvas.getContext('2d');
+                            let data = ctx.getImageData(0, 0, 800, 1100).data;
                             
                             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Yazıcı Payı (Margin) Düzeltiliyor (4/5)...' }));
                             
-                            // 2-STEP ALIGNMENT (Yazıcının küçültme payını iptal etme)
-                            // Köşe bölgelerinde (150x150) küçük bir tarayıcı ile siyah referans karelerin tam merkezini bul.
-                            function findMarkerCenter(startX, startY, width, height) {
-                                let minBrightness = 255;
-                                let bestX = startX + width/2;
-                                let bestY = startY + height/2;
-                                let ws = 24; // marker size estimate
-                                for(let y = startY; y < startY + height - ws; y+=3) {
-                                    for(let x = startX; x < startX + width - ws; x+=3) {
-                                        let sum = 0, count = 0;
-                                        for(let wy = 0; wy < ws; wy+=4) {
-                                            for(let wx = 0; wx < ws; wx+=4) {
-                                                let idx = ((y + wy) * 800 + (x + wx)) * 4;
-                                                sum += 0.2126*data[idx] + 0.7152*data[idx+1] + 0.0722*data[idx+2];
-                                                count++;
-                                            }
+                            // TÜM RESİMDEKİ SİYAH KARELERİ BULMA (Adaptive Threshold + Extent Filtresi)
+                            let gray = new cv.Mat();
+                            cv.cvtColor(warped, gray, cv.COLOR_RGBA2GRAY, 0);
+                            
+                            let thresh = new cv.Mat();
+                            // adaptiveThreshold ışık ve gölgelerden etkilenmez.
+                            cv.adaptiveThreshold(gray, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 51, 10);
+                            
+                            let ctrs = new cv.MatVector();
+                            let hrchy = new cv.Mat();
+                            cv.findContours(thresh, ctrs, hrchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                            let markers = [];
+                            for (let i = 0; i < ctrs.size(); ++i) {
+                                let cnt = ctrs.get(i);
+                                let area = cv.contourArea(cnt);
+                                if (area > 100 && area < 8000) {
+                                    let rect = cv.boundingRect(cnt);
+                                    let ratio = rect.width / rect.height;
+                                    // Kare formuna yakın olmalı
+                                    if (ratio > 0.6 && ratio < 1.6) {
+                                        let extent = area / (rect.width * rect.height);
+                                        // Dolululuk oranı. Daireler 0.78'dir, Kareler 0.95+. Böylece şıklar(yuvarlaklar) tamamen elenir.
+                                        if (extent > 0.80) { 
+                                            markers.push({
+                                                x: rect.x + rect.width / 2,
+                                                y: rect.y + rect.height / 2
+                                            });
                                         }
-                                        let avg = sum / count;
-                                        if (avg < minBrightness) { minBrightness = avg; bestX = x + ws/2; bestY = y + ws/2; }
                                     }
                                 }
-                                if(minBrightness > 130) return null; // Siyah kare yoksa iptal
-                                return {x: bestX, y: bestY};
+                            }
+                            
+                            gray.delete(); thresh.delete(); ctrs.delete(); hrchy.delete();
+
+                            let tl = null, tr = null, br = null, bl = null;
+                            if (markers.length >= 4) {
+                                // Bulunan X adet kareden, geometrik olarak kağıdın mutlak uç köşelerinde olan 4 tanesini seçer.
+                                markers.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+                                tl = markers[0]; // X ve Y'si en küçük olan Kesinlikle Top-Left'tir
+                                br = markers[markers.length - 1]; // Toplamı en büyük olan Bottom-Right'tır
+
+                                markers.sort((a, b) => (a.x - a.y) - (b.x - b.y));
+                                bl = markers[0]; // X'i küçük, Y'si en büyük olan (eksi değer) Bottom-Left
+                                tr = markers[markers.length - 1]; // X'i büyük, Y'si küçük olan Top-Right
                             }
 
-                            let tl = findMarkerCenter(0, 0, 150, 150);
-                            let tr = findMarkerCenter(650, 0, 150, 150);
-                            let br = findMarkerCenter(650, 950, 150, 150);
-                            let bl = findMarkerCenter(0, 950, 150, 150);
+                            // BULUNAN MARKERLARI KULLANICIYA GÖSTERMEK İÇİN ÇİZİM YAPIYORUZ
+                            if (tl) cv.circle(warped, new cv.Point(tl.x, tl.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
+                            if (tr) cv.circle(warped, new cv.Point(tr.x, tr.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
+                            if (br) cv.circle(warped, new cv.Point(br.x, br.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
+                            if (bl) cv.circle(warped, new cv.Point(bl.x, bl.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
 
                             if (tl && tr && br && bl) {
                                 // Bulunan gerçek marker koordinatlarını, ideal sanal koordinatlara zoomlayarak yapıştır.
@@ -319,7 +249,7 @@ export default function ScanScreen() {
                             }
                             
                             // ANA BELLEK TEMİZLİĞİ:
-                            M.delete(); warped.delete(); srcCoords.delete(); dstCoords.delete();
+                            warped.delete();
                             
                             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'STATUS', text: 'Cevaplar Hesaplanıyor (5/5)...' }));
 
@@ -337,9 +267,10 @@ export default function ScanScreen() {
 
                             // === 1. YUVARLAKLARI OKU VE ÜZERİNE ÇİZ ===
                             for (let i = 0; i < exam.questionCount; i++) {
-                                const isRightColumn = i >= 20;
+                                const halfCount = Math.ceil(exam.questionCount / 2);
+                                const isRightColumn = i >= halfCount;
                                 const qX = isRightColumn ? 420 : 80;
-                                const row = isRightColumn ? i - 20 : i;
+                                const row = isRightColumn ? i - halfCount : i;
                                 const qY = startY + (row * rowHeight);
 
                                 let maxDarkness = 0;
@@ -388,13 +319,27 @@ export default function ScanScreen() {
                                     ctx.strokeStyle = status === 'correct' ? '#4CAF50' : '#F44336';
                                     ctx.stroke();
                                     boundingBoxes.push({ qIndex: i, status });
+
+                                    // Eğer cevabı yanlış verdiyse, asıl doğru cevabı da YEŞİL ile göster
+                                    if (status === 'incorrect' && actualAns) {
+                                        const correctIndex = OPTIONS.indexOf(actualAns);
+                                        if (correctIndex !== -1) {
+                                            const correctDrawX = qX + 25 + (correctIndex * bubbleSpacing);
+                                            ctx.beginPath();
+                                            ctx.arc(correctDrawX, qY, 14, 0, 2 * Math.PI);
+                                            ctx.strokeStyle = '#4CAF50'; // Yeşil
+                                            ctx.stroke();
+                                        }
+                                    }
                                 } else if (status === 'empty' && actualAns) {
                                     const correctIndex = OPTIONS.indexOf(actualAns);
-                                    const drawX = qX + 25 + (correctIndex * bubbleSpacing);
-                                    ctx.beginPath();
-                                    ctx.arc(drawX, qY, 14, 0, 2 * Math.PI);
-                                    ctx.strokeStyle = '#FFC107'; // Sarı (Boş bıraktığı için bulması gereken)
-                                    ctx.stroke();
+                                    if (correctIndex !== -1) {
+                                        const drawX = qX + 25 + (correctIndex * bubbleSpacing);
+                                        ctx.beginPath();
+                                        ctx.arc(drawX, qY, 14, 0, 2 * Math.PI);
+                                        ctx.strokeStyle = '#FFC107'; // Sarı (Boş bıraktığı için bulması gereken)
+                                        ctx.stroke();
+                                    }
                                 }
                             }
 
@@ -537,22 +482,23 @@ export default function ScanScreen() {
       );
   }
 
+  const screenW = Dimensions.get('window').width;
+  const scanH = screenW * 0.85 * (1100 / 800);
+
   return (
     <View style={styles.container}>
-      <CameraView style={StyleSheet.absoluteFillObject} facing="back" ref={cameraRef} />
+      <CameraView style={StyleSheet.absoluteFillObject} facing="back" ref={cameraRef} autofocus="on" />
       {/* Overlay Configuration */}
       <View style={[styles.overlay, StyleSheet.absoluteFillObject]}>
+          <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
+             <MaterialCommunityIcons name="close" size={28} color="white" />
+          </TouchableOpacity>
           <View style={styles.maskTop} />
-          <View style={styles.maskCenter}>
+          <View style={[styles.maskCenter, { height: scanH }]}>
               <View style={styles.maskLeft} />
               <View style={styles.scanArea}>
-                  <View style={[styles.targetCorner, styles.targetTopLeft]} />
-                  <View style={[styles.targetCorner, styles.targetTopRight]} />
-                  <View style={[styles.targetCorner, styles.targetBottomLeft]} />
-                  <View style={[styles.targetCorner, styles.targetBottomRight]} />
-                  
                   <Text style={styles.scanHint}>
-                     Formu çerçeveye sığdırın
+                     Formu bu alana hizalayın
                   </Text>
               </View>
               <View style={styles.maskRight} />
@@ -588,18 +534,14 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: Colors.textSecondary, fontSize: 16 },
   camera: { flex: 1 },
   overlay: { flex: 1 },
+  closeBtn: { position: 'absolute', top: 50, right: 30, zIndex: 10, width: 44, height: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 22 },
   maskTop: { flex: 1, backgroundColor: maskColor },
   maskBottom: { flex: 1.5, backgroundColor: maskColor, justifyContent: 'flex-end', paddingBottom: 50 },
-  maskCenter: { flexDirection: 'row', height: 450 },
+  maskCenter: { flexDirection: 'row' },
   maskLeft: { flex: 1, backgroundColor: maskColor },
   maskRight: { flex: 1, backgroundColor: maskColor },
-  scanArea: { width: '80%', backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
+  scanArea: { width: '85%', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
   scanHint: { color: Colors.primary, fontWeight: 'bold', fontSize: 14, position: 'absolute', bottom: -30 },
-  targetCorner: { position: 'absolute', width: 30, height: 30, borderWidth: 4, borderColor: Colors.success, backgroundColor: 'rgba(76, 175, 80, 0.2)' },
-  targetTopLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
-  targetTopRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
-  targetBottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
-  targetBottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 40 },
   captureBtn: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'transparent', borderWidth: 4, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
   captureBtnInner: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.primary },

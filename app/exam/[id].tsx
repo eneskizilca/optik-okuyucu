@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getExamById, saveExam, getResultsForExam, deleteExam, deleteResult } from '../../utils/storage';
 import { Exam, ScanResult } from '../../utils/types';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import Svg, { Circle, Text as SvgText, Rect, G } from 'react-native-svg';
 
 export default function ExamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -12,6 +15,8 @@ export default function ExamDetailScreen() {
   const [exam, setExam] = useState<Exam | null>(null);
   const [results, setResults] = useState<ScanResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const viewShotRef = useRef<ViewShot>(null);
 
   const OPTIONS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -76,6 +81,95 @@ export default function ExamDetailScreen() {
     );
   };
 
+  const handleShareTemplate = async () => {
+    if (viewShotRef.current?.capture) {
+      setIsGenerating(true);
+      try {
+        const uri = await viewShotRef.current.capture();
+        const isAvailable = await Sharing.isAvailableAsync();
+        
+        if (isAvailable) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'image/jpeg',
+            dialogTitle: `${exam?.name || 'Sinav'}_optik_sablon.jpg`,
+          });
+        } else {
+          Alert.alert('Hata', 'Paylaşım bu cihazda desteklenmiyor.');
+        }
+      } catch (e) {
+        console.error(e);
+        Alert.alert('Hata', 'Şablon oluşturulamadı.');
+      } finally {
+        setIsGenerating(false);
+      }
+    }
+  };
+
+  const renderSvgTemplate = () => {
+    if (!exam) return null;
+    const sheetWidth = 800;
+    const sheetHeight = 1100;
+    
+    const renderAlignMarker = (x: number, y: number) => (
+      <Rect x={x} y={y} width={40} height={40} fill="black" />
+    );
+
+    const startY = 320; 
+    const rowHeight = 35;
+    const bubbleSpacing = 35;
+    const bubbleRadius = 12;
+
+    const halfCount = Math.ceil(exam.questionCount / 2);
+
+    const circles = [];
+    for (let i = 0; i < exam.questionCount; i++) {
+        const isRightColumn = i >= halfCount;
+        const qX = isRightColumn ? 420 : 80;
+        const row = isRightColumn ? i - halfCount : i;
+        const qY = startY + (row * rowHeight);
+
+        circles.push(
+            <SvgText key={`qNum_${i}`} x={qX} y={qY + 5} fontSize="16" fill="black" textAnchor="end">
+                {i + 1}.
+            </SvgText>
+        );
+
+        for(let opt=0; opt<exam.optionsCount; opt++) {
+            const bX = qX + 25 + (opt * bubbleSpacing);
+            circles.push(
+                <G key={`q${i}_o${opt}`}>
+                    <Circle cx={bX} cy={qY} r={bubbleRadius} stroke="black" strokeWidth="2" fill="white" />
+                    <SvgText x={bX} y={qY + 5} fontSize="14" fill="black" textAnchor="middle">
+                        {OPTIONS[opt]}
+                    </SvgText>
+                </G>
+            );
+        }
+    }
+
+    return (
+      <Svg width="100%" viewBox={`0 0 ${sheetWidth} ${sheetHeight}`} style={{ aspectRatio: sheetWidth / sheetHeight, backgroundColor: 'white' }}>
+        <Rect width="100%" height="100%" fill="white" />
+        <SvgText x={sheetWidth/2} y={60} fontSize="32" fontWeight="bold" fill="black" textAnchor="middle">
+          {exam.name || 'SINAV OPTİK FORMU'}
+        </SvgText>
+        <SvgText x={sheetWidth/2} y={100} fontSize="18" fill="gray" textAnchor="middle">
+          Lütfen yuvarlakların içini tamamen karalayınız.
+        </SvgText>
+        {renderAlignMarker(20, 20)}
+        {renderAlignMarker(sheetWidth - 60, 20)}
+        {renderAlignMarker(20, sheetHeight - 60)}
+        {renderAlignMarker(sheetWidth - 60, sheetHeight - 60)}
+
+        <Rect x={80} y={150} width={640} height={50} stroke="black" strokeWidth="2" fill="none" />
+        <SvgText x={95} y={180} fontSize="20" fontWeight="bold" fill="black">AD SOYAD :</SvgText>
+        <Rect x={80} y={220} width={640} height={50} stroke="black" strokeWidth="2" fill="none" />
+        <SvgText x={95} y={250} fontSize="20" fontWeight="bold" fill="black">ÖĞRENCİ NO :</SvgText>
+        {circles}
+      </Svg>
+    );
+  };
+
   if (loading || !exam) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -96,9 +190,27 @@ export default function ExamDetailScreen() {
             <Text style={styles.examTitle}>{exam.name}</Text>
             <Text style={styles.examSub}>{exam.questionCount} Soru • {dateStr}</Text>
           </View>
-          <TouchableOpacity onPress={handleDeleteExam} style={styles.deleteBtn}>
-             <MaterialCommunityIcons name="delete-outline" size={24} color={Colors.error} />
-          </TouchableOpacity>
+          <View style={{flexDirection: 'row', alignItems: 'center', gap: Spacing.sm}}>
+              <TouchableOpacity onPress={handleShareTemplate} style={styles.downloadBtn} disabled={isGenerating}>
+                 {isGenerating ? (
+                     <ActivityIndicator size="small" color={Colors.primary} />
+                 ) : (
+                     <MaterialCommunityIcons name="download" size={24} color={Colors.primary} />
+                 )}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleDeleteExam} style={styles.deleteBtn}>
+                 <MaterialCommunityIcons name="delete-outline" size={24} color={Colors.error} />
+              </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Off-screen ViewShot container for generating SVG image */}
+        <View style={{ position: 'absolute', left: -10000, top: -10000 }}>
+           <ViewShot ref={viewShotRef} options={{ format: 'jpg', quality: 1 }}>
+             <View style={{ width: 800, backgroundColor: 'white' }}>
+                 {renderSvgTemplate()}
+             </View>
+           </ViewShot>
         </View>
 
         {/* Answer Key Grid */}
@@ -193,6 +305,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   deleteBtn: {
+    padding: Spacing.sm,
+  },
+  downloadBtn: {
     padding: Spacing.sm,
   },
   section: {

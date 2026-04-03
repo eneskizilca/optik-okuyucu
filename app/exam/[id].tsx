@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput } from 'react-native';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -23,6 +23,24 @@ export default function ExamDetailScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const viewShotRef = useRef<ViewShot>(null);
+  const iconPulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(iconPulse, {
+          toValue: 1.35,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+        Animated.timing(iconPulse, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
 
   const OPTIONS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -401,7 +419,7 @@ export default function ExamDetailScreen() {
         {/* Sınav İstatistikleri */}
         {results.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sınav İstatistikleri</Text>
+            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Sınav İstatistikleri</Text>
             <View style={styles.statsCard}>
               {/* Sınıf Ortalaması */}
               <View style={styles.avgRow}>
@@ -453,7 +471,7 @@ export default function ExamDetailScreen() {
 
         {/* Excel Entegrasyonu */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Excel Entegrasyonu</Text>
+          <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Excel Entegrasyonu</Text>
           <View style={styles.excelCard}>
             {excelMeta ? (
               // Dosya yüklü
@@ -497,7 +515,7 @@ export default function ExamDetailScreen() {
 
         {/* Scans List */}
         <View style={styles.section}>
-           <Text style={styles.sectionTitle}>Taramalar ({results.length})</Text>
+           <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Taramalar ({results.length})</Text>
 
            {/* Arama Kutusu */}
            {results.length > 0 && (
@@ -559,10 +577,12 @@ export default function ExamDetailScreen() {
 
       {/* FAB - Camera Button */}
       <TouchableOpacity
-        style={[styles.fab, excelMeta && { bottom: 110 }]}
+        style={styles.fab}
         onPress={() => router.push(`/scan/${exam.id}`)}
       >
-        <MaterialCommunityIcons name="camera-iris" size={32} color="#FFF" />
+        <Animated.View style={{ transform: [{ scale: iconPulse }] }}>
+          <MaterialCommunityIcons name="camera-iris" size={28} color="#FFF" />
+        </Animated.View>
       </TouchableOpacity>
     </View>
   );
@@ -610,6 +630,9 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 18,
     fontWeight: '600',
+  },
+  sectionTitleSpaced: {
+    marginBottom: Spacing.md,
   },
   warningText: {
     color: Colors.warning,
@@ -715,18 +738,18 @@ const styles = StyleSheet.create({
   },
   fab: {
       position: 'absolute',
-      bottom: 30,
-      right: 30,
-      width: 65,
-      height: 65,
-      borderRadius: 32.5,
+      bottom: 26,
+      right: 24,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
       backgroundColor: Colors.primary,
       justifyContent: 'center',
       alignItems: 'center',
-      shadowColor: "#00D9FF",
+      shadowColor: Colors.primary,
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 5.46,
+      shadowOpacity: 0.35,
+      shadowRadius: 8,
       elevation: 9,
   },
   // İstatistik Kartı
@@ -889,11 +912,11 @@ const styles = StyleSheet.create({
   },
   excelFab: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 26,
     left: Spacing.lg,
-    right: 80,
-    height: 52,
-    borderRadius: 26,
+    right: 98,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#1D6F42',
     flexDirection: 'row',
     justifyContent: 'center',

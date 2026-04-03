@@ -62,15 +62,18 @@ export default function ExamCard({ exam, scanCount = 0, onDelete }: ExamCardProp
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    // Tam genişlik — parent ScrollView padding'inden faydalanır
     width: '100%',
-    // Gömülü buton için relative pozisyonlama
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   deleteBtn: {
     position: 'absolute',
@@ -79,19 +82,18 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.errorLight,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#fca5a5',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
   },
   title: {
     color: Colors.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     marginBottom: Spacing.sm,
-    // Silme butonuyla çakışmaması için sağdan boşluk
     paddingRight: 40,
   },
   statsContainer: {
@@ -107,6 +109,7 @@ const styles = StyleSheet.create({
   },
   statText: {
     color: Colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

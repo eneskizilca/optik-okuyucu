@@ -1,13 +1,13 @@
-import React, { useState, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import React, { useRef, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, G, Rect, Text as SvgText } from 'react-native-svg';
+import ViewShot from 'react-native-view-shot';
+import { BorderRadius, Colors, Spacing } from '../../constants/theme';
 import { saveExam } from '../../utils/storage';
 import { Exam } from '../../utils/types';
-import ViewShot from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
-import Svg, { Circle, Text as SvgText, Rect, G } from 'react-native-svg';
 
 export default function CreateExamScreen() {
   const [name, setName] = useState('');
@@ -157,7 +157,7 @@ export default function CreateExamScreen() {
         <Text style={styles.label}>Sınav Adı</Text>
         <TextInput
           style={styles.input}
-          placeholder="Örn: 1. Dönem Matematik Sınavı"
+          placeholder="Örn: Web - A406"
           placeholderTextColor={Colors.textSecondary}
           value={name}
           onChangeText={setName}
@@ -322,9 +322,7 @@ const styles = StyleSheet.create({
   },
   shareButton: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderWidth: 1,
+    backgroundColor: Colors.primary,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     alignItems: 'center',
@@ -332,8 +330,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   shareButtonText: {
-    color: '#FFF',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   }
 });

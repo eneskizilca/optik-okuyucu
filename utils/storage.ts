@@ -91,6 +91,23 @@ export const saveResult = async (result: ScanResult): Promise<void> => {
   }
 };
 
+export const updateResult = async (examId: string, result: ScanResult): Promise<void> => {
+  try {
+    const results = await getResultsForExam(examId);
+    const existingIndex = results.findIndex(r => r.id === result.id);
+    
+    if (existingIndex >= 0) {
+      results[existingIndex] = result;
+      await AsyncStorage.setItem(`${RESULTS_KEY_PREFIX}${examId}`, JSON.stringify(results));
+    } else {
+      throw new Error('Result not found');
+    }
+  } catch (e) {
+    console.error('Failed to update result:', e);
+    throw e;
+  }
+};
+
 export const deleteResult = async (examId: string, resultId: string): Promise<void> => {
   try {
     const results = await getResultsForExam(examId);

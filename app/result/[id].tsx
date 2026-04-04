@@ -1,23 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Colors, Spacing, BorderRadius } from '../../constants/theme';
-import { getResultsForExam, getExams } from '../../utils/storage';
-import { Exam, ScanResult } from '../../utils/types';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useAlert } from '../../components/AlertProvider';
+import { BorderRadius, Colors, Spacing } from '../../constants/theme';
+import { getExams, getResultsForExam, updateResult } from '../../utils/storage';
+import { Exam, ScanResult } from '../../utils/types';
 
 export default function ResultDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { showAlert } = useAlert();
   const [result, setResult] = useState<ScanResult | null>(null);
   const [exam, setExam] = useState<Exam | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [editedNo, setEditedNo] = useState('');
 
   useEffect(() => {
     const fetchResult = async () => {
       if (!id) return;
-      // Because we don't pass examId directly in the path for this route (to simplify links),
-      // we have to search across exams to find this result.
-      // In a real DB, result table would just be queried by ID.
       const allExams = await getExams();
       for (const e of allExams) {
         const results = await getResultsForExam(e.id);
@@ -25,12 +27,40 @@ export default function ResultDetailScreen() {
         if (found) {
           setResult(found);
           setExam(e);
+          setEditedName(found.studentName || '');
+          setEditedNo(found.studentNo || '');
           break;
         }
       }
     };
     fetchResult();
   }, [id]);
+
+  const handleSaveEdit = async () => {
+    if (!result || !exam) return;
+    
+    const updatedResult = {
+      ...result,
+      studentName: editedName.trim() || 'Bilinmiyor',
+      studentNo: editedNo.trim() || '0000',
+    };
+    
+    await updateResult(exam.id, updatedResult);
+    setResult(updatedResult);
+    setIsEditing(false);
+    
+    showAlert({
+      title: 'Başarılı',
+      message: 'Öğrenci bilgileri güncellendi',
+      type: 'success'
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditedName(result?.studentName || '');
+    setEditedNo(result?.studentNo || '');
+    setIsEditing(false);
+  };
 
   if (!result || !exam) {
     return (
@@ -50,12 +80,50 @@ export default function ResultDetailScreen() {
          <View style={styles.headerRow}>
             <MaterialCommunityIcons name="account-circle" size={48} color={Colors.primary} />
             <View style={{marginLeft: Spacing.md, flex: 1}}>
-                <Text style={styles.name}>{result.studentName || 'İsimsiz Öğrenci'}</Text>
-                <Text style={styles.no}>No: {result.studentNo || '-'}</Text>
+                {isEditing ? (
+                  <>
+                    <TextInput
+                      style={styles.input}
+                      value={editedName}
+                      onChangeText={setEditedName}
+                      placeholder="Ad Soyad"
+                      placeholderTextColor={Colors.textSecondary}
+                    />
+                    <TextInput
+                      style={[styles.input, {marginTop: Spacing.sm}]}
+                      value={editedNo}
+                      onChangeText={setEditedNo}
+                      placeholder="Öğrenci No"
+                      placeholderTextColor={Colors.textSecondary}
+                      keyboardType="numeric"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                      <Text style={styles.name}>{result.studentName || 'İsimsiz Öğrenci'}</Text>
+                      <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editIconBtn}>
+                        <MaterialCommunityIcons name="pencil" size={18} color={Colors.primary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={styles.no}>No: {result.studentNo || '-'}</Text>
+                  </>
+                )}
             </View>
-            <View style={styles.scoreCircle}>
-                <Text style={styles.scoreText}>{result.score}</Text>
-            </View>
+            {isEditing ? (
+              <View style={{flexDirection: 'row', gap: Spacing.sm}}>
+                <TouchableOpacity onPress={handleCancelEdit} style={styles.iconBtn}>
+                  <MaterialCommunityIcons name="close" size={24} color={Colors.error} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveEdit} style={styles.iconBtn}>
+                  <MaterialCommunityIcons name="check" size={24} color={Colors.success} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.scoreCircle}>
+                  <Text style={styles.scoreText}>{result.score}</Text>
+              </View>
+            )}
          </View>
          
          <View style={styles.statsRow}>
@@ -312,5 +380,36 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  input: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    color: Colors.text,
+    fontSize: 16,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  editIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginLeft: Spacing.sm,
   },
 });

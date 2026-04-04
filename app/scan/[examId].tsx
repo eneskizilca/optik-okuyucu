@@ -4,8 +4,9 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useAlert } from '../../components/AlertProvider';
 import { BorderRadius, Colors, Spacing } from '../../constants/theme';
 import { getExamById, saveResult } from '../../utils/storage';
 import { Exam } from '../../utils/types';
@@ -26,6 +27,7 @@ export default function ScanScreen() {
     const cameraRef = useRef<CameraView>(null);
     const webviewRef = useRef<WebView>(null);
     const trackInterval = useRef<NodeJS.Timeout | null>(null);
+    const { showAlert } = useAlert();
 
     useEffect(() => {
         const load = async () => {
@@ -53,17 +55,30 @@ export default function ScanScreen() {
         setStatusText('Hizalandı! Odaklanılıyor ve Fotoğraf Çekiliyor...');
 
         try {
+            // Android için daha uyumlu ayarlar
             const photo = await cameraRef.current.takePictureAsync({
                 quality: 0.8,
                 base64: false,
+                skipProcessing: true,
+                exif: false, // Android için
+                imageType: 'jpg', // Android için
             });
+            
+            console.log('📸 Fotoğraf çekildi:', photo);
+            
             if (photo?.uri) {
                 await startHeavyPipeline(photo.uri, photo.width, photo.height);
             } else {
+                console.log('⚠️ Photo URI yok');
                 setPipelineState('tracking');
             }
-        } catch (e) {
-            Alert.alert('Hata', 'Çekim başarısız.');
+        } catch (e: any) {
+            console.error('📸 Çekim hatası:', e);
+            showAlert({
+                title: 'Çekim Hatası',
+                message: 'Android kamera hatası. Lütfen galeriden seçmeyi deneyin.',
+                type: 'error',
+            });
             setPipelineState('tracking');
         }
     };

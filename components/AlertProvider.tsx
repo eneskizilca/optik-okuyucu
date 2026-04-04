@@ -71,10 +71,10 @@ export const AlertProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const handleButtonPress = async (button: AlertButton) => {
     // Eğer async bir işlem varsa (onPress varsa), önce onu çalıştır
     if (button.onPress) {
-      const result = button.onPress();
-      // Eğer Promise dönüyorsa bekle
-      if (result instanceof Promise) {
-        await result;
+      try {
+        await Promise.resolve(button.onPress());
+      } catch (error) {
+        console.error('Button press error:', error);
       }
     }
     // Sonra modal'ı kapat

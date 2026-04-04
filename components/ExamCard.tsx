@@ -1,65 +1,89 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BorderRadius, Colors, Spacing } from '../constants/theme';
 import { Exam } from '../utils/types';
-import { Colors, Spacing, BorderRadius } from '../constants/theme';
-import { Link } from 'expo-router';
 
 interface ExamCardProps {
   exam: Exam;
   scanCount?: number;
+  onDelete?: () => void;
 }
 
-export default function ExamCard({ exam, scanCount = 0 }: ExamCardProps) {
+export default function ExamCard({ exam, scanCount = 0, onDelete }: ExamCardProps) {
   const date = new Date(exam.createdAt).toLocaleDateString('tr-TR');
-  
+  const router = useRouter();
+
   return (
-    <Link href={`/exam/${exam.id}`} asChild>
-      <TouchableOpacity style={styles.card} activeOpacity={0.7}>
-        <View style={styles.header}>
-          <Text style={styles.title} numberOfLines={1}>{exam.name}</Text>
-          <MaterialCommunityIcons name="chevron-right" size={24} color={Colors.textSecondary} />
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => router.push(`/exam/${exam.id}` as any)}
+    >
+      {/* Sil butonu — sağ üst köşeye gömülü */}
+      {onDelete && (
+        <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+          <MaterialCommunityIcons name="delete-outline" size={18} color={Colors.error} />
+        </TouchableOpacity>
+      )}
+
+      <Text style={styles.title} numberOfLines={1}>{exam.name}</Text>
+
+      <View style={styles.statsContainer}>
+        <View style={styles.statLabel}>
+          <MaterialCommunityIcons name="format-list-numbered" size={15} color={Colors.textSecondary} />
+          <Text style={styles.statText}>{exam.questionCount} Soru</Text>
         </View>
-        
-        <View style={styles.statsContainer}>
-          <View style={styles.statLabel}>
-            <MaterialCommunityIcons name="format-list-numbered" size={16} color={Colors.textSecondary} />
-            <Text style={styles.statText}>{exam.questionCount} Soru</Text>
-          </View>
-          <View style={styles.statLabel}>
-            <MaterialCommunityIcons name="camera-iris" size={16} color={Colors.textSecondary} />
-            <Text style={styles.statText}>{scanCount} Tarama</Text>
-          </View>
-          <View style={styles.statLabel}>
-            <MaterialCommunityIcons name="calendar-month" size={16} color={Colors.textSecondary} />
-            <Text style={styles.statText}>{date}</Text>
-          </View>
+        <View style={styles.statLabel}>
+          <MaterialCommunityIcons name="camera-iris" size={15} color={Colors.textSecondary} />
+          <Text style={styles.statText}>{scanCount} Tarama</Text>
         </View>
-      </TouchableOpacity>
-    </Link>
+        <View style={styles.statLabel}>
+          <MaterialCommunityIcons name="calendar-month" size={15} color={Colors.textSecondary} />
+          <Text style={styles.statText}>{date}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    width: '100%',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  deleteBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.errorLight,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    zIndex: 10,
   },
   title: {
     color: Colors.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    flex: 1,
+    marginBottom: Spacing.sm,
+    paddingRight: 40,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -74,6 +98,7 @@ const styles = StyleSheet.create({
   },
   statText: {
     color: Colors.textSecondary,
-    fontSize: 14,
-  }
+    fontSize: 13,
+    fontWeight: '500',
+  },
 });

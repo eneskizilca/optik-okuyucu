@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, RefreshControl } from 'react-native';
-import { Colors, Spacing } from '../../constants/theme';
-import { getExams, getResultsForExam } from '../../utils/storage';
-import { Exam } from '../../utils/types';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAlert } from '../../components/AlertProvider';
 import ExamCard from '../../components/ExamCard';
-import { useNavigation } from 'expo-router';
+import { Colors, Spacing } from '../../constants/theme';
+import { deleteExam, getExams, getResultsForExam } from '../../utils/storage';
+import { Exam } from '../../utils/types';
 
 export default function ExamsScreen() {
   const [exams, setExams] = useState<(Exam & { scanCount: number })[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const navigation = useNavigation();
+  const { showAlert } = useAlert();
 
   const loadData = async () => {
     try {
@@ -26,12 +27,30 @@ export default function ExamsScreen() {
     }
   };
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
+  useFocusEffect(
+    useCallback(() => {
       loadData();
+    }, [])
+  );
+
+  const handleDelete = async (exam: Exam & { scanCount: number }) => {
+    showAlert({
+      title: 'Sınavı Sil',
+      message: `"${exam.name}" sınavını ve tüm tarama verilerini silmek istiyor musunuz?`,
+      type: 'confirm',
+      buttons: [
+        { text: 'İptal', style: 'cancel' },
+        { 
+          text: 'Sil', 
+          style: 'destructive', 
+          onPress: async () => {
+            await deleteExam(exam.id);
+            await loadData();
+          }
+        },
+      ],
     });
-    return unsubscribe;
-  }, [navigation]);
+  };
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -51,7 +70,12 @@ export default function ExamsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
       >
         {exams.map((exam) => (
-          <ExamCard key={exam.id} exam={exam} scanCount={exam.scanCount} />
+          <ExamCard
+            key={exam.id}
+            exam={exam}
+            scanCount={exam.scanCount}
+            onDelete={() => handleDelete(exam)}
+          />
         ))}
       </ScrollView>
     </View>

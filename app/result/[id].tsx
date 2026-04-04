@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Image } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { getResultsForExam, getExams } from '../../utils/storage';
@@ -8,6 +8,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function ResultDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [result, setResult] = useState<ScanResult | null>(null);
   const [exam, setExam] = useState<Exam | null>(null);
 
@@ -42,6 +43,7 @@ export default function ResultDetailScreen() {
   const OPTIONS = ['A', 'B', 'C', 'D', 'E'];
 
   return (
+    <View style={styles.outerContainer}>
     <ScrollView style={styles.container}>
       {/* Overview Card */}
       <View style={styles.card}>
@@ -128,10 +130,26 @@ export default function ResultDetailScreen() {
          </View>
       </View>
     </ScrollView>
+
+    {/* Sticky bottom button */}
+    <View style={styles.stickyBar}>
+      <TouchableOpacity
+        style={styles.scanAgainBtn}
+        onPress={() => router.replace((`/scan/${result.examId}`) as any)}
+      >
+        <MaterialCommunityIcons name="camera-iris" size={22} color="#fff" style={{ marginRight: 8 }} />
+        <Text style={styles.scanAgainText}>Diğer Optiği Tara</Text>
+      </TouchableOpacity>
+    </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -273,5 +291,26 @@ const styles = StyleSheet.create({
       backgroundColor: 'rgba(0,0,0,0.5)',
       borderRadius: 10,
       padding: 2,
-  }
+  },
+  stickyBar: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    paddingBottom: 30,
+    backgroundColor: Colors.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  scanAgainBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanAgainText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });

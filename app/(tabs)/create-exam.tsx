@@ -1,13 +1,14 @@
-import React, { useState, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import React, { useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, G, Rect, Text as SvgText } from 'react-native-svg';
+import ViewShot from 'react-native-view-shot';
+import { useAlert } from '../../components/AlertProvider';
+import { BorderRadius, Colors, Spacing } from '../../constants/theme';
 import { saveExam } from '../../utils/storage';
 import { Exam } from '../../utils/types';
-import ViewShot from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
-import Svg, { Circle, Text as SvgText, Rect, G } from 'react-native-svg';
 
 export default function CreateExamScreen() {
   const [name, setName] = useState('');
@@ -16,17 +17,26 @@ export default function CreateExamScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const router = useRouter();
   const viewShotRef = useRef<ViewShot>(null);
+  const { showAlert } = useAlert();
 
   const OPTIONS = ['A', 'B', 'C', 'D', 'E'];
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Hata', 'Lütfen sınav adını giriniz.');
+      showAlert({
+        title: 'Hata',
+        message: 'Lütfen sınav adını giriniz.',
+        type: 'error',
+      });
       return;
     }
 
     if (questionCount < 1 || questionCount > 40) {
-      Alert.alert('Hata', 'Soru sayısı 1 ile 40 arasında olmalıdır.');
+      showAlert({
+        title: 'Hata',
+        message: 'Soru sayısı 1 ile 40 arasında olmalıdır.',
+        type: 'error',
+      });
       return;
     }
 
@@ -41,12 +51,21 @@ export default function CreateExamScreen() {
 
     try {
       await saveExam(newExam);
-      Alert.alert('Başarılı', 'Sınav oluşturuldu!', [
-        { text: 'Tamam', onPress: () => router.push('/exams') }
-      ]);
+      showAlert({
+        title: 'Başarılı',
+        message: 'Sınav oluşturuldu!',
+        type: 'success',
+        buttons: [
+          { text: 'Tamam', onPress: () => router.push('/exams') }
+        ],
+      });
       setName('');
     } catch (e) {
-      Alert.alert('Hata', 'Sınav kaydedilemedi.');
+      showAlert({
+        title: 'Hata',
+        message: 'Sınav kaydedilemedi.',
+        type: 'error',
+      });
     }
   };
 
@@ -63,11 +82,19 @@ export default function CreateExamScreen() {
             dialogTitle: `${name || 'Sinav'}_optik_sablon.jpg`,
           });
         } else {
-          Alert.alert('Hata', 'Paylaşım bu cihazda desteklenmiyor.');
+          showAlert({
+            title: 'Hata',
+            message: 'Paylaşım bu cihazda desteklenmiyor.',
+            type: 'error',
+          });
         }
       } catch (e) {
         console.error(e);
-        Alert.alert('Hata', 'Şablon oluşturulamadı.');
+        showAlert({
+          title: 'Hata',
+          message: 'Şablon oluşturulamadı.',
+          type: 'error',
+        });
       } finally {
         setIsGenerating(false);
       }
@@ -89,11 +116,13 @@ export default function CreateExamScreen() {
     const bubbleSpacing = 35;
     const bubbleRadius = 12;
 
+    const halfCount = Math.ceil(questionCount / 2);
+
     const circles = [];
     for (let i = 0; i < questionCount; i++) {
-        const isRightColumn = i >= 20;
+        const isRightColumn = i >= halfCount;
         const qX = isRightColumn ? 420 : 80;
-        const row = isRightColumn ? i - 20 : i;
+        const row = isRightColumn ? i - halfCount : i;
         
         const qY = startY + (row * rowHeight);
 
@@ -155,7 +184,7 @@ export default function CreateExamScreen() {
         <Text style={styles.label}>Sınav Adı</Text>
         <TextInput
           style={styles.input}
-          placeholder="Örn: 1. Dönem Matematik Sınavı"
+          placeholder="Örn: Web - A406"
           placeholderTextColor={Colors.textSecondary}
           value={name}
           onChangeText={setName}
@@ -320,9 +349,7 @@ const styles = StyleSheet.create({
   },
   shareButton: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderColor: Colors.border,
-    borderWidth: 1,
+    backgroundColor: Colors.primary,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
     alignItems: 'center',
@@ -330,8 +357,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   shareButtonText: {
-    color: '#FFF',
+    color: '#ffffff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   }
 });

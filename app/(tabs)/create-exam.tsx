@@ -2,9 +2,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import React, { useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, G, Rect, Text as SvgText } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
+import { useAlert } from '../../components/AlertProvider';
 import { BorderRadius, Colors, Spacing } from '../../constants/theme';
 import { saveExam } from '../../utils/storage';
 import { Exam } from '../../utils/types';
@@ -16,17 +17,26 @@ export default function CreateExamScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const router = useRouter();
   const viewShotRef = useRef<ViewShot>(null);
+  const { showAlert } = useAlert();
 
   const OPTIONS = ['A', 'B', 'C', 'D', 'E'];
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Hata', 'Lütfen sınav adını giriniz.');
+      showAlert({
+        title: 'Hata',
+        message: 'Lütfen sınav adını giriniz.',
+        type: 'error',
+      });
       return;
     }
 
     if (questionCount < 1 || questionCount > 40) {
-      Alert.alert('Hata', 'Soru sayısı 1 ile 40 arasında olmalıdır.');
+      showAlert({
+        title: 'Hata',
+        message: 'Soru sayısı 1 ile 40 arasında olmalıdır.',
+        type: 'error',
+      });
       return;
     }
 
@@ -41,12 +51,21 @@ export default function CreateExamScreen() {
 
     try {
       await saveExam(newExam);
-      Alert.alert('Başarılı', 'Sınav oluşturuldu!', [
-        { text: 'Tamam', onPress: () => router.push('/exams') }
-      ]);
+      showAlert({
+        title: 'Başarılı',
+        message: 'Sınav oluşturuldu!',
+        type: 'success',
+        buttons: [
+          { text: 'Tamam', onPress: () => router.push('/exams') }
+        ],
+      });
       setName('');
     } catch (e) {
-      Alert.alert('Hata', 'Sınav kaydedilemedi.');
+      showAlert({
+        title: 'Hata',
+        message: 'Sınav kaydedilemedi.',
+        type: 'error',
+      });
     }
   };
 
@@ -63,11 +82,19 @@ export default function CreateExamScreen() {
             dialogTitle: `${name || 'Sinav'}_optik_sablon.jpg`,
           });
         } else {
-          Alert.alert('Hata', 'Paylaşım bu cihazda desteklenmiyor.');
+          showAlert({
+            title: 'Hata',
+            message: 'Paylaşım bu cihazda desteklenmiyor.',
+            type: 'error',
+          });
         }
       } catch (e) {
         console.error(e);
-        Alert.alert('Hata', 'Şablon oluşturulamadı.');
+        showAlert({
+          title: 'Hata',
+          message: 'Şablon oluşturulamadı.',
+          type: 'error',
+        });
       } finally {
         setIsGenerating(false);
       }

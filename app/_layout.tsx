@@ -1,10 +1,11 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { AlertProvider } from '../components/AlertProvider';
 import { Colors } from '../constants/theme';
 
 export default function RootLayout() {
   return (
-    <>
+    <AlertProvider>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -24,6 +25,6 @@ export default function RootLayout() {
         <Stack.Screen name="scan/[examId]" options={{ title: 'Optik Tarama', headerBackTitle: 'İptal', presentation: 'fullScreenModal' }} />
         <Stack.Screen name="result/[id]" options={{ title: 'Tarama Sonucu', headerBackTitle: 'Geri' }} />
       </Stack>
-    </>
+    </AlertProvider>
   );
 }

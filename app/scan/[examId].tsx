@@ -225,12 +225,6 @@ export default function ScanScreen() {
                                 tr = markers[markers.length - 1]; // X'i büyük, Y'si küçük olan Top-Right
                             }
 
-                            // BULUNAN MARKERLARI KULLANICIYA GÖSTERMEK İÇİN ÇİZİM YAPIYORUZ
-                            if (tl) cv.circle(warped, new cv.Point(tl.x, tl.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
-                            if (tr) cv.circle(warped, new cv.Point(tr.x, tr.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
-                            if (br) cv.circle(warped, new cv.Point(br.x, br.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
-                            if (bl) cv.circle(warped, new cv.Point(bl.x, bl.y), 10, new cv.Scalar(255, 0, 255, 255), -1);
-
                             if (tl && tr && br && bl) {
                                 // Bulunan gerçek marker koordinatlarını, ideal sanal koordinatlara zoomlayarak yapıştır.
                                 let srcCoords2 = cv.matFromArray(4, 1, cv.CV_32FC2, [ tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y ]);
@@ -239,6 +233,14 @@ export default function ScanScreen() {
                                 let M2 = cv.getPerspectiveTransform(srcCoords2, dstCoords2);
                                 let finalWarped = new cv.Mat();
                                 cv.warpPerspective(warped, finalWarped, M2, new cv.Size(800, 1100), cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255,255,255,255));
+                                
+                                // BULUNAN MARKERLARI KULLANICIYA GÖSTERMEK İÇİN ÇİZİM YAPIYORUZ (PEMBE NOKTALAR)
+                                // Düzeltilmiş koordinatlarda çiz (40, 40), (760, 40), (760, 1060), (40, 1060)
+                                cv.circle(finalWarped, new cv.Point(40, 40), 10, new cv.Scalar(255, 0, 255, 255), -1);
+                                cv.circle(finalWarped, new cv.Point(760, 40), 10, new cv.Scalar(255, 0, 255, 255), -1);
+                                cv.circle(finalWarped, new cv.Point(760, 1060), 10, new cv.Scalar(255, 0, 255, 255), -1);
+                                cv.circle(finalWarped, new cv.Point(40, 1060), 10, new cv.Scalar(255, 0, 255, 255), -1);
+                                
                                 cv.imshow(canvas, finalWarped);
                                 
                                 srcCoords2.delete(); dstCoords2.delete(); M2.delete(); finalWarped.delete();
@@ -363,11 +365,8 @@ export default function ScanScreen() {
                             const noResult = await worker.recognize(noB64);
                             await worker.terminate();
 
-                            const scName = nameResult.data.text
-                                .replace(/^(AD\s*SOYAD|AD|SOYAD|NAME|İSİM|ISIM)\s*[:\-]?\s*/i, '')
-                                .replace(/\n.*/s, '') // sadece ilk satırı al
-                                .trim() || 'Bilinmiyor';
-                            const scNo = noResult.data.text.replace(/[^0-9]/g, '') || '0000'; // Numarayı izole et
+                            const scName = nameResult.data.text.replace('AD SOYAD', '').replace(':', '').trim() || 'Bilinmiyor';
+                            const scNo = noResult.data.text.replace(/[^0-9]/g, '') || '0000';
 
                             // Nihai İşlenmiş Resmi Dışa Aktar
                             const finalImageBase64 = canvas.toDataURL('image/jpeg', 0.8);

@@ -1,14 +1,16 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, ScrollView, RefreshControl } from 'react-native';
-import { Colors, Spacing } from '../../constants/theme';
-import { getExams, getResultsForExam, deleteExam } from '../../utils/storage';
-import { Exam } from '../../utils/types';
-import ExamCard from '../../components/ExamCard';
 import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useAlert } from '../../components/AlertProvider';
+import ExamCard from '../../components/ExamCard';
+import { Colors, Spacing } from '../../constants/theme';
+import { deleteExam, getExams, getResultsForExam } from '../../utils/storage';
+import { Exam } from '../../utils/types';
 
 export default function ExamsScreen() {
   const [exams, setExams] = useState<(Exam & { scanCount: number })[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const { showAlert } = useAlert();
 
   const loadData = async () => {
     try {
@@ -31,9 +33,23 @@ export default function ExamsScreen() {
     }, [])
   );
 
-  const handleDelete = async (examId: string) => {
-    await deleteExam(examId);
-    await loadData();
+  const handleDelete = async (exam: Exam & { scanCount: number }) => {
+    showAlert({
+      title: 'Sınavı Sil',
+      message: `"${exam.name}" sınavını ve tüm tarama verilerini silmek istiyor musunuz?`,
+      type: 'confirm',
+      buttons: [
+        { text: 'İptal', style: 'cancel' },
+        { 
+          text: 'Sil', 
+          style: 'destructive', 
+          onPress: async () => {
+            await deleteExam(exam.id);
+            await loadData();
+          }
+        },
+      ],
+    });
   };
 
   const onRefresh = React.useCallback(async () => {
@@ -58,7 +74,7 @@ export default function ExamsScreen() {
             key={exam.id}
             exam={exam}
             scanCount={exam.scanCount}
-            onDelete={() => handleDelete(exam.id)}
+            onDelete={() => handleDelete(exam)}
           />
         ))}
       </ScrollView>

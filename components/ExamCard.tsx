@@ -1,9 +1,9 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Exam } from '../utils/types';
-import { Colors, Spacing, BorderRadius } from '../constants/theme';
 import { useRouter } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BorderRadius, Colors, Spacing } from '../constants/theme';
+import { Exam } from '../utils/types';
 
 interface ExamCardProps {
   exam: Exam;
@@ -15,17 +15,6 @@ export default function ExamCard({ exam, scanCount = 0, onDelete }: ExamCardProp
   const date = new Date(exam.createdAt).toLocaleDateString('tr-TR');
   const router = useRouter();
 
-  const handleDelete = () => {
-    Alert.alert(
-      'Sınavı Sil',
-      `"${exam.name}" sınavını ve tüm tarama verilerini silmek istiyor musunuz?`,
-      [
-        { text: 'İptal', style: 'cancel' },
-        { text: 'Sil', style: 'destructive', onPress: onDelete },
-      ]
-    );
-  };
-
   return (
     <TouchableOpacity
       style={styles.card}
@@ -34,7 +23,7 @@ export default function ExamCard({ exam, scanCount = 0, onDelete }: ExamCardProp
     >
       {/* Sil butonu — sağ üst köşeye gömülü */}
       {onDelete && (
-        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+        <TouchableOpacity style={styles.deleteBtn} onPress={onDelete} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
           <MaterialCommunityIcons name="delete-outline" size={18} color={Colors.error} />
         </TouchableOpacity>
       )}

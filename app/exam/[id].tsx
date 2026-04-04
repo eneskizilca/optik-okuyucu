@@ -1,16 +1,17 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Animated } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
-import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getExamById, saveExam, getResultsForExam, deleteExam, deleteResult, saveExcelForExam, getExcelForExam, deleteExcelForExam, ExcelMeta } from '../../utils/storage';
-import { processExcel } from '../../utils/excelProcessor';
-import { Exam, ScanResult } from '../../utils/types';
-import ViewShot from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import Svg, { Circle, Text as SvgText, Rect, G } from 'react-native-svg';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, G, Rect, Text as SvgText } from 'react-native-svg';
+import ViewShot from 'react-native-view-shot';
+import { useAlert } from '../../components/AlertProvider';
+import { BorderRadius, Colors, Spacing } from '../../constants/theme';
+import { processExcel } from '../../utils/excelProcessor';
+import { deleteExam, deleteExcelForExam, deleteResult, ExcelMeta, getExamById, getExcelForExam, getResultsForExam, saveExam, saveExcelForExam } from '../../utils/storage';
+import { Exam, ScanResult } from '../../utils/types';
 
 export default function ExamDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,6 +25,7 @@ export default function ExamDetailScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const viewShotRef = useRef<ViewShot>(null);
   const iconPulse = useRef(new Animated.Value(1)).current;
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     Animated.loop(
@@ -56,7 +58,12 @@ export default function ExamDetailScreen() {
         const excel = await getExcelForExam(id);
         setExcelMeta(excel);
       } else {
-        Alert.alert('Hata', 'Sınav bulunamadı', [{ text: 'Tamam', onPress: () => router.back() }]);
+        showAlert({
+          title: 'Hata',
+          message: 'Sınav bulunamadı',
+          type: 'error',
+          buttons: [{ text: 'Tamam', onPress: () => router.back() }],
+        });
       }
     } catch (error) {
       console.error(error);
@@ -90,10 +97,11 @@ export default function ExamDetailScreen() {
   };
 
   const handleDeleteResult = (resultId: string) => {
-    Alert.alert(
-      'Taramayı Sil',
-      'Bu tarama sonucunu kalıcı olarak silmek istiyor musunuz?',
-      [
+    showAlert({
+      title: 'Taramayı Sil',
+      message: 'Bu tarama sonucunu kalıcı olarak silmek istiyor musunuz?',
+      type: 'confirm',
+      buttons: [
         { text: 'İptal', style: 'cancel' },
         {
           text: 'Sil',
@@ -105,8 +113,8 @@ export default function ExamDetailScreen() {
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   // ─── Excel İşlemleri ─────────────────────────────────────────────
@@ -131,16 +139,28 @@ export default function ExamDetailScreen() {
       };
       await saveExcelForExam(id as string, meta);
       setExcelMeta(meta);
-      Alert.alert('Başarılı', `"${asset.name}" yüklendi.`);
+      showAlert({
+        title: 'Başarılı',
+        message: `"${asset.name}" yüklendi.`,
+        type: 'success',
+      });
     } catch (e: any) {
-      Alert.alert('Hata', 'Dosya okunamadı: ' + e.message);
+      showAlert({
+        title: 'Hata',
+        message: 'Dosya okunamadı: ' + e.message,
+        type: 'error',
+      });
     }
   };
 
   const handleProcessExcel = async () => {
     if (!excelMeta || !exam) return;
     if (results.length === 0) {
-      Alert.alert('Uyarı', 'Henüz tarama yapılmamış. Lütfen önce optikleri tarayın.');
+      showAlert({
+        title: 'Uyarı',
+        message: 'Henüz tarama yapılmamış. Lütfen önce optikleri tarayın.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -163,53 +183,72 @@ export default function ExamDetailScreen() {
         ? `${matched} öğrencinin notu işlendi.\n\nExcel'de bulunamayan taramalar: ${notFound.join(', ')}`
         : `${matched} öğrencinin notu başarıyla işlendi.`;
 
-      Alert.alert('İşlem Tamamlandı', msg, [
-        {
-          text: 'Excel\u2019i İndir',
-          onPress: async () => {
-            const available = await Sharing.isAvailableAsync();
-            if (available) {
-              await Sharing.shareAsync(outUri, {
-                mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                dialogTitle: `${exam.name} Notlar.xlsx`,
-              });
-            } else {
-              Alert.alert('Hata', 'Paylaşım bu cihazda desteklenmiyor.');
-            }
+      showAlert({
+        title: 'İşlem Tamamlandı',
+        message: msg,
+        type: 'success',
+        buttons: [
+          {
+            text: 'Excel\'i İndir',
+            onPress: async () => {
+              const available = await Sharing.isAvailableAsync();
+              if (available) {
+                await Sharing.shareAsync(outUri, {
+                  mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  dialogTitle: `${exam.name} Notlar.xlsx`,
+                });
+              } else {
+                showAlert({
+                  title: 'Hata',
+                  message: 'Paylaşım bu cihazda desteklenmiyor.',
+                  type: 'error',
+                });
+              }
+            },
           },
-        },
-        { text: 'Kapat', style: 'cancel' },
-      ]);
+          { text: 'Kapat', style: 'cancel' },
+        ],
+      });
     } catch (e: any) {
-      Alert.alert('Hata', e.message || 'Excel işlenemedi.');
+      showAlert({
+        title: 'Hata',
+        message: e.message || 'Excel işlenemedi.',
+        type: 'error',
+      });
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleRemoveExcel = () => {
-    Alert.alert('Excel Kaldır', 'Yüklenen Excel dosyası silinsin mi?', [
-      { text: 'İptal', style: 'cancel' },
-      {
-        text: 'Kaldır',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteExcelForExam(id as string);
-          setExcelMeta(null);
+    showAlert({
+      title: 'Excel Kaldır',
+      message: 'Yüklenen Excel dosyası silinsin mi?',
+      type: 'confirm',
+      buttons: [
+        { text: 'İptal', style: 'cancel' },
+        {
+          text: 'Kaldır',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteExcelForExam(id as string);
+            setExcelMeta(null);
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleDeleteExam = () => {
-    Alert.alert(
-      "Sınavı Sil",
-      "Sınavı ve altındaki tüm okumaları silmek istediğinize emin misiniz?",
-      [
-        { text: "İptal", style: "cancel" },
+    showAlert({
+      title: 'Sınavı Sil',
+      message: 'Sınavı ve altındaki tüm okumaları silmek istediğinize emin misiniz?',
+      type: 'confirm',
+      buttons: [
+        { text: 'İptal', style: 'cancel' },
         { 
-          text: "Sil", 
-          style: "destructive",
+          text: 'Sil', 
+          style: 'destructive',
           onPress: async () => {
              if (exam) {
                  await deleteExam(exam.id);
@@ -217,8 +256,8 @@ export default function ExamDetailScreen() {
              }
           }
         }
-      ]
-    );
+      ],
+    });
   };
 
   const handleShareTemplate = async () => {
@@ -234,11 +273,19 @@ export default function ExamDetailScreen() {
             dialogTitle: `${exam?.name || 'Sinav'}_optik_sablon.jpg`,
           });
         } else {
-          Alert.alert('Hata', 'Paylaşım bu cihazda desteklenmiyor.');
+          showAlert({
+            title: 'Hata',
+            message: 'Paylaşım bu cihazda desteklenmiyor.',
+            type: 'error',
+          });
         }
       } catch (e) {
         console.error(e);
-        Alert.alert('Hata', 'Şablon oluşturulamadı.');
+        showAlert({
+          title: 'Hata',
+          message: 'Şablon oluşturulamadı.',
+          type: 'error',
+        });
       } finally {
         setIsGenerating(false);
       }

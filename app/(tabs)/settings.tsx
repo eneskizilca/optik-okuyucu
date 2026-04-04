@@ -1,15 +1,19 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAlert } from '../../components/AlertProvider';
 import { BorderRadius, Colors, Spacing } from '../../constants/theme';
 
 export default function SettingsScreen() {
+  const { showAlert } = useAlert();
+  
   const clearData = () => {
-    Alert.alert(
-      "Verileri Temizle",
-      "Tüm sınavlar ve tarama sonuçları silinecek. Emin misiniz?",
-      [
+    showAlert({
+      title: "Verileri Temizle",
+      message: "Tüm sınavlar ve tarama sonuçları silinecek. Emin misiniz?",
+      type: "warning",
+      buttons: [
         { text: "İptal", style: "cancel" },
         { 
           text: "Sil", 
@@ -17,14 +21,22 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await AsyncStorage.clear();
-              Alert.alert("Başarılı", "Tüm veriler temizlendi.");
+              showAlert({
+                title: "Başarılı",
+                message: "Tüm veriler temizlendi.",
+                type: "success"
+              });
             } catch (e) {
-              Alert.alert("Hata", "Veriler temizlenemedi.");
+              showAlert({
+                title: "Hata",
+                message: "Veriler temizlenemedi.",
+                type: "error"
+              });
             }
           }
         }
       ]
-    );
+    });
   };
 
   return (

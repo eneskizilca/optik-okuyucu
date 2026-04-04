@@ -427,6 +427,8 @@ export default function ScanScreen() {
                                 .replace('ADSOYAD', '')
                                 .replace(':', '')
                                 .replace('-', '')
+                                .replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ\s]/g, '') // Sadece harf ve boşluk
+                                .replace(/\s+/g, ' ') // Çoklu boşlukları tek yap
                                 .trim() || 'Bilinmiyor';
                             const scNo = noResult.data.text.replace(/[^0-9]/g, '') || '0000';
 

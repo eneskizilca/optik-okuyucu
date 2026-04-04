@@ -26,6 +26,7 @@ export default function ScanScreen() {
     const [pipelineState, setPipelineState] = useState<'idle' | 'tracking' | 'processing' | 'ocr' | 'finalizing'>('idle');
     const [statusText, setStatusText] = useState('Hedef Aranıyor...');
     const [htmlContent, setHtmlContent] = useState<string>('');
+    const [isCameraReady, setIsCameraReady] = useState(false);
 
     console.log('📊 Pipeline state:', pipelineState);
 
@@ -57,6 +58,7 @@ export default function ScanScreen() {
         console.log('📸 Camera ref:', cameraRef.current ? 'VAR' : 'YOK');
         console.log('📸 Device:', device ? 'VAR' : 'YOK');
         console.log('📸 Permission:', hasPermission);
+        console.log('📸 Camera ready:', isCameraReady);
         
         if (!cameraRef.current || !device) {
             console.log('⚠️ Camera hazır değil');
@@ -64,6 +66,16 @@ export default function ScanScreen() {
                 title: 'Hata',
                 message: 'Kamera hazır değil',
                 type: 'error'
+            });
+            return;
+        }
+
+        if (!isCameraReady) {
+            console.log('⚠️ Kamera henüz başlatılıyor');
+            showAlert({
+                title: 'Bekleyin',
+                message: 'Kamera hazırlanıyor...',
+                type: 'warning'
             });
             return;
         }
@@ -296,9 +308,8 @@ export default function ScanScreen() {
                                 const row = isRightColumn ? i - halfCount : i;
                                 const qY = startY + (row * rowHeight);
 
-                                let maxDarkness = 0;
-                                let selectedIndex = -1;
-
+                                // TÜM seçeneklerin karanlık oranlarını topla
+                                let darknessRatios = [];
                                 for(let opt=0; opt < exam.optionsCount; opt++) {
                                     const bX = qX + 25 + (opt * bubbleSpacing);
                                     let darkPixelsCount = 0;
@@ -316,13 +327,24 @@ export default function ScanScreen() {
                                         }
                                     }
                                     const darknessRatio = darkPixelsCount / totalChecked;
-                                    if(darknessRatio > 0.40 && darknessRatio > maxDarkness) { 
-                                        maxDarkness = darknessRatio;
-                                        selectedIndex = opt;
-                                    }
+                                    darknessRatios.push({ index: opt, ratio: darknessRatio });
                                 }
 
-                                let ans = selectedIndex !== -1 ? OPTIONS[selectedIndex] : '';
+                                // 0.40'ın üzerinde olan tüm işaretli seçenekleri bul
+                                let markedOptions = darknessRatios.filter(d => d.ratio > 0.40);
+                                
+                                let ans = '';
+                                let isMultipleMarked = markedOptions.length > 1;
+                                
+                                if (markedOptions.length === 1) {
+                                    // Tek işaretli - normal
+                                    ans = OPTIONS[markedOptions[0].index];
+                                } else if (markedOptions.length > 1) {
+                                    // Birden fazla işaretli - yanlış say ama cevabı en koyu olan olsun
+                                    markedOptions.sort((a, b) => b.ratio - a.ratio);
+                                    ans = OPTIONS[markedOptions[0].index];
+                                }
+
                                 studentAnswers.push(ans);
                                 
                                 const actualAns = exam.answerKey[i];
@@ -330,12 +352,30 @@ export default function ScanScreen() {
                                 
                                 if (!actualAns) { } 
                                 else if (ans === '') { status = 'empty'; empty++; } 
+                                else if (isMultipleMarked) { 
+                                    // Birden fazla işaretli - yanlış say
+                                    status = 'incorrect'; 
+                                    incorrect++; 
+                                } 
                                 else if (ans === actualAns) { status = 'correct'; correct++; } 
                                 else { status = 'incorrect'; incorrect++; }
 
                                 ctx.lineWidth = 4;
-                                if (status !== 'empty' && selectedIndex !== -1) {
-                                    const drawX = qX + 25 + (selectedIndex * bubbleSpacing);
+                                
+                                if (isMultipleMarked && actualAns) {
+                                    // Birden fazla işaretli - hepsini göster
+                                    for (let marked of markedOptions) {
+                                        const drawX = qX + 25 + (marked.index * bubbleSpacing);
+                                        ctx.beginPath();
+                                        ctx.arc(drawX, qY, 14, 0, 2 * Math.PI);
+                                        // Doğru cevap yeşil, diğerleri kırmızı
+                                        ctx.strokeStyle = OPTIONS[marked.index] === actualAns ? '#4CAF50' : '#F44336';
+                                        ctx.stroke();
+                                    }
+                                    boundingBoxes.push({ qIndex: i, status: 'incorrect' });
+                                } else if (status !== 'empty' && markedOptions.length === 1) {
+                                    // Tek işaretli - normal çizim
+                                    const drawX = qX + 25 + (markedOptions[0].index * bubbleSpacing);
                                     ctx.beginPath();
                                     ctx.arc(drawX, qY, 14, 0, 2 * Math.PI);
                                     ctx.strokeStyle = status === 'correct' ? '#4CAF50' : '#F44336';
@@ -393,7 +433,9 @@ export default function ScanScreen() {
                             const finalImageBase64 = canvas.toDataURL('image/jpeg', 0.8);
 
                             const validQuestions = exam.answerKey.filter(a => a).length;
-                            const score = validQuestions > 0 ? Math.round((correct / validQuestions) * 100) : 0;
+                            let score = validQuestions > 0 ? (correct / validQuestions) * 100 : 0;
+                            // Tam sayıysa tam, değilse 2 ondalık
+                            score = Number.isInteger(score) ? score : parseFloat(score.toFixed(2));
 
                             const resultPayload = {
                                 id: Date.now().toString(),
@@ -554,6 +596,10 @@ export default function ScanScreen() {
                 device={device}
                 isActive={true}
                 photo={true}
+                onInitialized={() => {
+                    console.log('📸 Kamera hazır!');
+                    setIsCameraReady(true);
+                }}
             />
             
             <View style={[styles.overlay, StyleSheet.absoluteFillObject]}>

@@ -250,18 +250,19 @@ const styles = StyleSheet.create({
       marginTop: 2,
   },
   scoreCircle: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 20,
       backgroundColor: Colors.surface,
       justifyContent: 'center',
       alignItems: 'center',
       borderWidth: 2,
       borderColor: Colors.primary,
+      minWidth: 70,
   },
   scoreText: {
       color: Colors.text,
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: 'bold',
   },
   statsRow: {

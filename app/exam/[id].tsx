@@ -414,9 +414,14 @@ export default function ExamDetailScreen() {
   const missingAnsCount = exam.answerKey.filter(a => !a).length;
 
   // ─── Sınav İstatistikleri ───
-  const avgScore = results.length > 0
-    ? Math.round(results.reduce((sum, r) => sum + r.score, 0) / results.length)
+  let avgScore = results.length > 0
+    ? results.reduce((sum, r) => sum + r.score, 0) / results.length
     : null;
+  
+  // Tam sayıysa tam, değilse 2 ondalık
+  if (avgScore !== null) {
+    avgScore = Number.isInteger(avgScore) ? avgScore : parseFloat(avgScore.toFixed(2));
+  }
 
   const wrongCounts: number[] = Array(exam.questionCount).fill(0);
   results.forEach(r => {

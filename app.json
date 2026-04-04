@@ -4,7 +4,7 @@
     "slug": "optik-okuyucu",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/eroz-icon.png",
     "scheme": "optikokuyucu",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
@@ -17,10 +17,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0A0A1A",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/eroz-icon.png"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -33,19 +31,19 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/eroz-icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/eroz-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#0A0A1A",
+          "backgroundColor": "#FFFFFF",
           "dark": {
-            "backgroundColor": "#0A0A1A"
+            "backgroundColor": "#FFFFFF"
           }
         }
       ],

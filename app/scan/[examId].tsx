@@ -365,7 +365,13 @@ export default function ScanScreen() {
                             const noResult = await worker.recognize(noB64);
                             await worker.terminate();
 
-                            const scName = nameResult.data.text.replace('AD SOYAD', '').replace(':', '').trim() || 'Bilinmiyor';
+                            const scName = nameResult.data.text
+                                .replace('AD SOYAD', '')
+                                .replace('AD SOYAD:', '')
+                                .replace('ADSOYAD', '')
+                                .replace(':', '')
+                                .replace('-', '')
+                                .trim() || 'Bilinmiyor';
                             const scNo = noResult.data.text.replace(/[^0-9]/g, '') || '0000';
 
                             // Nihai İşlenmiş Resmi Dışa Aktar

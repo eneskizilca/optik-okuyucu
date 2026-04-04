@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { WebView } from 'react-native-webview';
 import { useAlert } from '../../components/AlertProvider';
 import { BorderRadius, Colors, Spacing } from '../../constants/theme';
@@ -24,7 +25,7 @@ export default function ScanScreen() {
 
     const [htmlContent, setHtmlContent] = useState<string>('');
 
-    const cameraRef = useRef<Camera>(null);
+    const cameraRef = useRef<any>(null);
     const webviewRef = useRef<WebView>(null);
     const trackInterval = useRef<NodeJS.Timeout | null>(null);
     const { showAlert } = useAlert();
@@ -444,7 +445,11 @@ export default function ScanScreen() {
 
         } catch (e) {
             console.error(e);
-            Alert.alert('Hata', 'Görüntü hazırlanamadı.');
+            showAlert({
+                title: 'Hata',
+                message: 'Görüntü hazırlanamadı.',
+                type: 'error'
+            });
             setPipelineState('tracking');
         }
     };
@@ -468,7 +473,11 @@ export default function ScanScreen() {
             setPipelineState('idle');
             router.replace(("/result/" + finalResult.id) as any);
         } else if (data.type === 'ERROR') {
-            Alert.alert('OKUMA HATASI', data.message);
+            showAlert({
+                title: 'OKUMA HATASI',
+                message: data.message,
+                type: 'error'
+            });
             setPipelineState('tracking');
         }
     };

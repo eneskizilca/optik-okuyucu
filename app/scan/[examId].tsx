@@ -1,5 +1,4 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,7 +14,8 @@ export default function ScanScreen() {
     const { examId } = useLocalSearchParams<{ examId: string }>();
     const router = useRouter();
 
-    const [permission, requestPermission] = useCameraPermissions();
+    const { hasPermission, requestPermission } = useCameraPermission();
+    const device = useCameraDevice('back');
     const [exam, setExam] = useState<Exam | null>(null);
 
     // States to manage our heavy lifting Pipeline
@@ -24,7 +24,7 @@ export default function ScanScreen() {
 
     const [htmlContent, setHtmlContent] = useState<string>('');
 
-    const cameraRef = useRef<CameraView>(null);
+    const cameraRef = useRef<Camera>(null);
     const webviewRef = useRef<WebView>(null);
     const trackInterval = useRef<NodeJS.Timeout | null>(null);
     const { showAlert } = useAlert();
@@ -34,6 +34,12 @@ export default function ScanScreen() {
             if (examId) {
                 const e = await getExamById(examId);
                 setExam(e);
+                
+                // Kamera iznini kontrol et
+                if (!hasPermission) {
+                    await requestPermission();
+                }
+                
                 setPipelineState('tracking');
             }
         };
@@ -55,28 +61,26 @@ export default function ScanScreen() {
         setStatusText('Hizalandı! Odaklanılıyor ve Fotoğraf Çekiliyor...');
 
         try {
-            // Android için daha uyumlu ayarlar
-            const photo = await cameraRef.current.takePictureAsync({
-                quality: 0.8,
-                base64: false,
-                skipProcessing: true,
-                exif: false, // Android için
-                imageType: 'jpg', // Android için
+            const photo = await cameraRef.current.takePhoto({
+                qualityPrioritization: 'balanced',
+                flash: 'off',
             });
             
             console.log('📸 Fotoğraf çekildi:', photo);
             
-            if (photo?.uri) {
-                await startHeavyPipeline(photo.uri, photo.width, photo.height);
+            if (photo?.path) {
+                const uri = `file://${photo.path}`;
+                // Vision Camera width/height vermez, varsayılan kullan
+                await startHeavyPipeline(uri, 1200, 1600);
             } else {
-                console.log('⚠️ Photo URI yok');
+                console.log('⚠️ Photo path yok');
                 setPipelineState('tracking');
             }
         } catch (e: any) {
             console.error('📸 Çekim hatası:', e);
             showAlert({
                 title: 'Çekim Hatası',
-                message: 'Android kamera hatası. Lütfen galeriden seçmeyi deneyin.',
+                message: e.message || 'Fotoğraf çekilemedi.',
                 type: 'error',
             });
             setPipelineState('tracking');
@@ -509,7 +513,15 @@ export default function ScanScreen() {
 
     return (
         <View style={styles.container}>
-            <CameraView style={StyleSheet.absoluteFillObject} facing="back" ref={cameraRef} autofocus="on" />
+            {device && hasPermission && (
+                <Camera
+                    ref={cameraRef}
+                    style={StyleSheet.absoluteFillObject}
+                    device={device}
+                    isActive={pipelineState === 'tracking'}
+                    photo={true}
+                />
+            )}
             {/* Overlay Configuration */}
             <View style={[styles.overlay, StyleSheet.absoluteFillObject]}>
                 <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>

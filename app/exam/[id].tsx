@@ -22,6 +22,7 @@ export default function ExamDetailScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [excelMeta, setExcelMeta] = useState<ExcelMeta | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [excelUri, setExcelUri] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const viewShotRef = useRef<ViewShot>(null);
   const iconPulse = useRef(new Animated.Value(1)).current;
@@ -148,6 +149,40 @@ export default function ExamDetailScreen() {
       showAlert({
         title: 'Hata',
         message: 'Dosya okunamadı: ' + e.message,
+        type: 'error',
+      });
+    }
+  };
+
+  const handleDownloadExcel = async () => {
+    console.log('📥 handleDownloadExcel çağrıldı, excelUri:', excelUri);
+    if (!excelUri || !exam) {
+      console.log('❌ excelUri veya exam yok');
+      return;
+    }
+    try {
+      console.log('🔍 Sharing.isAvailableAsync kontrol ediliyor...');
+      const available = await Sharing.isAvailableAsync();
+      console.log('✅ Sharing available:', available);
+      if (available) {
+        console.log('📤 Sharing.shareAsync çağrılıyor...');
+        await Sharing.shareAsync(excelUri, {
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          dialogTitle: `${exam.name} Notlar.xlsx`,
+        });
+        console.log('✅ Sharing tamamlandı');
+      } else {
+        showAlert({
+          title: 'Hata',
+          message: 'Paylaşım bu cihazda desteklenmiyor.',
+          type: 'error',
+        });
+      }
+    } catch (e: any) {
+      console.error('❌ Sharing hatası:', e);
+      showAlert({
+        title: 'Hata',
+        message: 'Paylaşım başarısız: ' + e.message,
         type: 'error',
       });
     }

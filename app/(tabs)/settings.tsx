@@ -1,8 +1,8 @@
-import React from 'react';
-import { StyleSheet, Text, View, Alert, TouchableOpacity } from 'react-native';
-import { Colors, Spacing, BorderRadius } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import React from 'react';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { BorderRadius, Colors, Spacing } from '../../constants/theme';
 
 export default function SettingsScreen() {
   const clearData = () => {
@@ -47,6 +47,7 @@ export default function SettingsScreen() {
         <Text style={styles.footerLine}>Geliştiren: Enes Kızılca</Text>
         <Text style={styles.footerLine}>3. Sınıf Yazılım Mühendisliği Öğrencisi</Text>
         <Text style={styles.footerLine}>235541116 | GECE-B</Text>
+        <Text style={styles.footerLine}>2026</Text>
       </View>
     </View>
   );
@@ -95,7 +96,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: Spacing.lg,
-    paddingBottom: 40,
+    paddingBottom: 20,
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: Colors.border,

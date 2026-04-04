@@ -68,11 +68,17 @@ export const AlertProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     });
   };
 
-  const handleButtonPress = (button: AlertButton) => {
+  const handleButtonPress = async (button: AlertButton) => {
+    // Eğer async bir işlem varsa (onPress varsa), önce onu çalıştır
+    if (button.onPress) {
+      const result = button.onPress();
+      // Eğer Promise dönüyorsa bekle
+      if (result instanceof Promise) {
+        await result;
+      }
+    }
+    // Sonra modal'ı kapat
     hideAlert();
-    setTimeout(() => {
-      button.onPress?.();
-    }, 300);
   };
 
   const getIconConfig = () => {

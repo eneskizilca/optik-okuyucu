@@ -421,7 +421,7 @@ export default function ScanScreen() {
                             const noResult = await worker.recognize(noB64);
                             await worker.terminate();
 
-                            const scName = nameResult.data.text
+                            let scName = nameResult.data.text
                                 .replace('AD SOYAD', '')
                                 .replace('AD SOYAD:', '')
                                 .replace('ADSOYAD', '')
@@ -429,7 +429,9 @@ export default function ScanScreen() {
                                 .replace('-', '')
                                 .replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ\s]/g, '') // Sadece harf ve boşluk
                                 .replace(/\s+/g, ' ') // Çoklu boşlukları tek yap
-                                .trim() || 'Bilinmiyor';
+                                .trim();
+                            
+                            if (!scName) scName = 'Bilinmiyor';
                             const scNo = noResult.data.text.replace(/[^0-9]/g, '') || '0000';
 
                             const finalImageBase64 = canvas.toDataURL('image/jpeg', 0.8);

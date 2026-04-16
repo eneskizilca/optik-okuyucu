@@ -330,8 +330,8 @@ export default function ScanScreen() {
                                     darknessRatios.push({ index: opt, ratio: darknessRatio });
                                 }
 
-                                // 0.40'ın üzerinde olan tüm işaretli seçenekleri bul
-                                let markedOptions = darknessRatios.filter(d => d.ratio > 0.40);
+                                // 0.6'ın üzerinde olan tüm işaretli seçenekleri bul (harfleri yok sayar)
+                                let markedOptions = darknessRatios.filter(d => d.ratio > 0.6);
                                 
                                 let ans = '';
                                 let isMultipleMarked = markedOptions.length > 1;
